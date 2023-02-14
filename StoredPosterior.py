@@ -1,7 +1,11 @@
 import re
 import urllib.request
 import requests
+import random
+import string
 
+# Generate a random string to uniquely identify every instance of SSTI generated from this file
+random_string = ''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase, k=10))
 
 def begin_scan():
     """
@@ -130,27 +134,42 @@ def test_stored_posterior(urls):
 
             post_link = post_url(front.text)
             for name in inputs:
-                data = {name: "{{7*7}}", "_token": token}
+                data = {name: url+" {{7*7}} "+random_string, "_token": token}
                 req = requests.post(post_link, data=data, cookies=cookies)
 
-                print(post_link)
-                req_html = get_html(post_link)  # issue, getting the below data is hard when doing multiple
-                print(req_html)
+                # print("history: ", req.history)
+                # input()
+                #
+                # print("original post: ", post_link)
+                # req_html = get_html(post_link)  # issue, getting the below data is hard when doing multiple
+                # print("req_html: ", req_html)
+                # print("history: ", str(req.history))
+                # input()
 
-                if ("49" in str(req_html) and str(req.url[:-1]) != str(url)):
-                    scan_result[url] = "True, on url: " + str(post_url())
-                else:
-                    scan_result[url] = False
+                # if ("49" in str(req_html) and str(req.url[:-1]) != str(url)):
+                #     scan_result[url] = "True, on link: " + str(post_link)
+                # else:
+                #     scan_result[url] = False
         except:
             continue
 
-        # for next_url in urls:
-        #     html = get_html(next_url)
-        #
-        #     if("49" in str(html)):
-        #         scan_result[next_url] = True
-        #     else:
-        #         scan_result[next_url] = False
+    for next_url in urls:
+        html_to_inspect = str(get_html(next_url))
+        req_line = ''
+
+        # Check if the randomly generated string at the beginning is in the HTML
+        if(random_string in html_to_inspect):
+            for line in html_to_inspect.split("\n"):
+                if(random_string in line):
+                    req_line = line  # Save line once found
+
+            origin_url = re.findall(r"(http://[a-zA-Z0-9_:;=./\'\\\\]+)", req_line)
+            if("49" in req_line):
+                scan_result[next_url] = "True, Origin From: " + str(origin_url[0]) + " Executed on: " + str(next_url)
+            else:
+                scan_result[next_url] = False
+        else:
+            scan_result[next_url] = False
 
     return scan_result
 
