@@ -1,4 +1,5 @@
 import re
+import time
 import urllib.request
 import requests
 
@@ -25,6 +26,53 @@ def get_html(url):
     return html
 
 
+def get_page_urls(html):
+    """
+    This function gets all href data in <a> tags and verifies which of them are in the current domain and removes extra
+    characters if so
+    """
+
+    link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
+
+    required_links = []
+    for link in link_collection:
+        if (link.find("127.0.0.1:8000") != -1):
+            modif_link = link.replace("href=\"", '')
+            modif_link = modif_link.replace("\"", '')
+            required_links.append(modif_link)
+
+    return required_links
+
+
+def check_nested_links(required_links):
+    """
+    Iterates through collected links and checks for new ones in them
+    """
+
+    nested_links = []
+    for url in required_links:
+        response = urllib.request.urlopen(url)
+        html = response.read()
+
+        link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
+
+        for link in link_collection:
+            if (link.find("127.0.0.1:8000") != -1):
+                modif_link = link.replace("href=\"", '')
+                modif_link = modif_link.replace("\"", '')
+                nested_links.append(modif_link)
+    return nested_links
+
+
+def filter_links(all_urls):
+    """
+    This function checks for duplicates in the total collection of links in the website and removes them
+    """
+
+    all_urls = list(dict.fromkeys(all_urls))
+    return all_urls
+
+
 def locate_input_points(html):
     """
     Finds all text input tags and returns their names
@@ -32,15 +80,17 @@ def locate_input_points(html):
 
     # find all input tags including token
     input_collection = re.findall(r"(<input [a-zA-Z0-9 _=\"'\\\\]*>)+", str(html))
-    print(input_collection)
-    all_names = []  # array containing necessary input tags which will be used later
-    for elem in input_collection:  # loop through inputs, remove token & submit input
-        if "_token" in elem:
-            input_collection.remove(elem)
-        elif "type='submit'" in elem:
-            input_collection.remove(elem)
+    textarea_collection = re.findall(r"(<textarea [a-zA-Z0-9 _:;=\"'\\\\]*>)+", str(html))
+    total_inputs = input_collection + textarea_collection
 
-    for inp in input_collection:  # filter through remaining valid inputs storing the names
+    all_names = []  # array containing necessary input tags which will be used later
+    for elem in total_inputs:  # loop through inputs, remove token & submit input
+        if "_token" in elem:
+            total_inputs.remove(elem)
+        elif "type='submit'" in elem:
+            total_inputs.remove(elem)
+
+    for inp in total_inputs:  # filter through remaining valid inputs storing the names
         all_names = re.findall(r"(name=[\\\\'a-zA-Z0-9\"'\\\\']+)", inp)
 
     final_names = []
@@ -48,33 +98,39 @@ def locate_input_points(html):
         temp_name = elem.replace("name=", "")
         temp_name = temp_name.replace("'", "")
         final_names.append(temp_name)
+
     return final_names
 
 
 def test_stored_immediate(urls):
     """
     This function performs SSTI on a given target url for all forms, and checks each page to verify if any of it has
-    executed
+    executed. This function performs differently as it assesses SSTI based on how long the request takes to complete.
     """
 
+    scan_result = {}
     for url in urls:
         session = requests.session()
         front = session.get(url)
 
-        token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', front.text)[0]
-        cookies = session.cookies
+        try:
+            token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', front.text)[0]
+            cookies = session.cookies
 
-        inputs = locate_input_points(front.text)
+            inputs = locate_input_points(front.text)
 
-        print(inputs)
-        for name in inputs:
-            data = {name: "{{7*7}}", "_token": token}
-            req = requests.post(url, data=data, cookies=cookies)
-            text = req.text
-            print(text)
+            for name in inputs:
+                data = {name: "{{7*7}}", "_token": token}
+                start = time.time()
+                req = requests.post(url, data=data, cookies=cookies)
+                end = time.time()
+                print(str(end-start))
+                if("storedimm" in url):
+                    print(req.text)
+        except:
+            continue
 
 
-        # scan_result = {}
         # for next_url in urls:
         #     html = get_html(next_url)
         #
@@ -89,12 +145,11 @@ def test_stored_immediate(urls):
 # Begin the scanning process
 html = begin_scan()
 
-# urls = get_page_urls(html)
-#
-# nested_links = check_nested_links(urls)
-# filtered_urls = filter_links(urls+nested_links)
-#stored_pos_results = \
-test_stored_immediate(["http://127.0.0.1:8000/storedimm"])
+urls = get_page_urls(html)
+
+nested_links = check_nested_links(urls)
+filtered_urls = filter_links(urls+nested_links)
+test_stored_immediate(filtered_urls)
 
 # for result in stored_pos_results:  # print results
 #    print("URL: " + result + " hasExecutedSSTI: " + str(stored_pos_results[result]))

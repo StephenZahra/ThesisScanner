@@ -125,7 +125,6 @@ def test_stored_posterior(urls):
         session = requests.session()
         front = session.get(url)
 
-        token = ""
         try:
             token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', front.text)[0]
             cookies = session.cookies
@@ -135,21 +134,7 @@ def test_stored_posterior(urls):
             post_link = post_url(front.text)
             for name in inputs:
                 data = {name: url+" {{7*7}} "+random_string, "_token": token}
-                req = requests.post(post_link, data=data, cookies=cookies)
-
-                # print("history: ", req.history)
-                # input()
-                #
-                # print("original post: ", post_link)
-                # req_html = get_html(post_link)  # issue, getting the below data is hard when doing multiple
-                # print("req_html: ", req_html)
-                # print("history: ", str(req.history))
-                # input()
-
-                # if ("49" in str(req_html) and str(req.url[:-1]) != str(url)):
-                #     scan_result[url] = "True, on link: " + str(post_link)
-                # else:
-                #     scan_result[url] = False
+                requests.post(post_link, data=data, cookies=cookies)
         except:
             continue
 
