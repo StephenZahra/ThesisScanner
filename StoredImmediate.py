@@ -2,6 +2,7 @@ import re
 import time
 import urllib.request
 import requests
+from smtplib import SMTP
 
 def begin_scan():
     """
@@ -120,14 +121,24 @@ def test_stored_immediate(urls):
             inputs = locate_input_points(front.text)
 
             for name in inputs:
-                data = {name: "{{7*7}}", "_token": token}
+                data = {name: "{{7*7}} @php sleep(1); @endphp", "_token": token}
                 start = time.time()
                 req = requests.post(url, data=data, cookies=cookies)
+                print(url)
+                print(req.text)
                 end = time.time()
-                print(str(end-start))
-                if("storedimm" in url):
-                    print(req.text)
+
+                # If it's visible, we consider that this is reflected injection and not stored immediate injection
+                if("49" in req.text):
+                    scan_result[name] = False
+
+                if(end-start >= 10):
+                    scan_result[name] = True
+                else:
+                    scan_result[name] = False
         except:
+            print("we are here: " + url)
+            scan_result[url] = False
             continue
 
 
@@ -135,11 +146,11 @@ def test_stored_immediate(urls):
         #     html = get_html(next_url)
         #
         #     if("49" in str(html)):
-        #         scan_result[next_url] = True
+        #
         #     else:
         #         scan_result[next_url] = False
 
-        #return scan_result
+    return scan_result
 
 
 # Begin the scanning process
@@ -149,7 +160,7 @@ urls = get_page_urls(html)
 
 nested_links = check_nested_links(urls)
 filtered_urls = filter_links(urls+nested_links)
-test_stored_immediate(filtered_urls)
+stored_imm_results = test_stored_immediate(filtered_urls)
 
-# for result in stored_pos_results:  # print results
-#    print("URL: " + result + " hasExecutedSSTI: " + str(stored_pos_results[result]))
+for result in stored_imm_results:  # print results
+   print("input name: " + result + " isVulnerable: " + str(stored_imm_results[result]))

@@ -60,15 +60,17 @@ def locate_input_points(html):
 
     # find all input tags including token
     input_collection = re.findall(r"(<input [a-zA-Z0-9 _=\"'\\\\]*>)+", str(html))
+    textarea_collection = re.findall(r"(<textarea [a-zA-Z0-9 _:;=\"'\\\\]*>)+", str(html))
+    total_inputs = input_collection + textarea_collection
 
     all_names = []  # array containing necessary input tags which will be used later
-    for elem in input_collection:  # loop through inputs, remove token & submit input
+    for elem in total_inputs:  # loop through inputs, remove token & submit input
         if "_token" in elem:
-            input_collection.remove(elem)
+            total_inputs.remove(elem)
         elif "type='submit'" in elem:
-            input_collection.remove(elem)
+            total_inputs.remove(elem)
 
-    for inp in input_collection:  # filter through remaining valid inputs storing the names
+    for inp in total_inputs:  # filter through remaining valid inputs storing the names
         all_names = re.findall(r"(name=[\\\\'a-zA-Z0-9\"'\\\\']+)", str(inp))
 
     final_names = []
@@ -95,27 +97,32 @@ def test_reflected(urls):
     with boolean values
     """
 
+    scan_result = []  # array to store results
     for url in urls:
         session = requests.session()
         front = session.get(url)
 
-        token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', front.text)[0]
-        cookies = session.cookies
+        try:
+            token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', front.text)[0]
+            cookies = session.cookies
 
-        inputs = locate_input_points(front.text)
+            inputs = locate_input_points(front.text)
+            for name in inputs:
+                data = {name: "{{7*7}}", "_token": token}
+                req = requests.post(url, data=data, cookies=cookies)
 
-        scan_result = {}  # dictionary to store results
-        for name in inputs:
-            data = {name: "{{7*7}}", "_token": token}
-            req = requests.post(url, data=data, cookies=cookies)
-            text = req.text
+                # Check that an error is not thrown due to GET route
+                if("methodNotAllowed" in req.text):
+                    scan_result.append("URL: " + url + " isVulnerable: Unable to test, only GET is supported")
 
-            if "49" in text:
-                scan_result[name] = True
-            else:
-                scan_result[name] = False
+                if "49" in req.text:
+                    scan_result.append("URL: " + url + " Input name: " + name + " isVulnerable: True")
+                else:
+                    scan_result.append("URL: " + url + " Input name: " + name + " isVulnerable: False")
+        except IndexError:  # A page had no inputs we could find
+            scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
 
-        return scan_result
+    return scan_result
 
 
 # Begin the scanning process
@@ -128,4 +135,4 @@ filtered_urls = filter_links(urls+nested_links)
 results = test_reflected(filtered_urls)
 
 for result in results:  # print results
-    print("Input name: " + result + " isVulnerable: " + str(results[result]))
+    print(result)

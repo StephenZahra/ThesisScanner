@@ -170,4 +170,4 @@ filtered_urls = filter_links(urls+nested_links)
 stored_pos_results = test_stored_posterior(filtered_urls)
 
 for result in stored_pos_results:  # print results
-   print("URL: " + result + " hasExecutedSSTI: " + str(stored_pos_results[result]))
+   print("Input name: " + result + " isVulnerable: " + str(stored_pos_results[result]))
