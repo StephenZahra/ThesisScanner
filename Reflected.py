@@ -91,13 +91,26 @@ def filter_links(all_urls):
     return all_urls
 
 
+def post_urls(html):
+    """
+    This function finds all form action links in a page, and returns only the required form action links
+    """
+    post_links = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)
+    formatted_links = []
+
+    for link in post_links:
+        formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", link)
+        formatted_links.append(formatted_link[0])
+
+    return formatted_links
+
 def test_reflected(urls):
     """
-    Repeatedly sends POST requests to the page using previously acquired input tag names, returns dictionary
-    with boolean values
+    Repeatedly sends POST requests to the page using previously acquired input tag names, returns array with
+    test results
     """
 
-    scan_result = []  # array to store results
+    scan_result = []
     for url in urls:
         session = requests.session()
         front = session.get(url)
@@ -107,18 +120,22 @@ def test_reflected(urls):
             cookies = session.cookies
 
             inputs = locate_input_points(front.text)
-            for name in inputs:
-                data = {name: "{{7*7}}", "_token": token}
-                req = requests.post(url, data=data, cookies=cookies)
+            p_urls = post_urls(front.text)
 
-                # Check that an error is not thrown due to GET route
-                if("methodNotAllowed" in req.text):
-                    scan_result.append("URL: " + url + " isVulnerable: Unable to test, only GET is supported")
+            for post_url in p_urls:
+                for name in inputs:
+                    data = {name: "{{7*7}}", "_token": token}
+                    req = requests.post(post_url, data=data, cookies=cookies)
 
-                if "49" in req.text:
-                    scan_result.append("URL: " + url + " Input name: " + name + " isVulnerable: True")
-                else:
-                    scan_result.append("URL: " + url + " Input name: " + name + " isVulnerable: False")
+                    # Check that an error is not thrown due to GET route, skip rest of code execution
+                    if("methodNotAllowed" in req.text):
+                        scan_result.append("URL: " + url + " isVulnerable: Unable to test, only GET is supported")
+                        continue
+
+                    if "49" in req.text:
+                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: True")
+                    else:
+                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: False")
         except IndexError:  # A page had no inputs we could find
             scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
 

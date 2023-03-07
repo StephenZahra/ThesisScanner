@@ -4,7 +4,7 @@ import requests
 import random
 import string
 
-# Generate a random string to uniquely identify every instance of SSTI generated from this file
+# Generate a random string to uniquely identify every instance of Stored Posterior SSTI generated from this script
 random_string = ''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase, k=10))
 
 def begin_scan():
@@ -106,12 +106,18 @@ def filter_links(all_urls):
     return all_urls
 
 
-def post_url(html):
-    post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)
-    link = post_link[0]
-    formatted_link = re.findall(r"(http://[a-zA-Z0-9 _:;=./\'\\\\]+)", link)
+def post_urls(html):
+    """
+    This function finds all form action links in a page, and returns only the required form action links
+    """
+    post_links = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)
+    formatted_links = []
 
-    return formatted_link[0]
+    for link in post_links:
+        formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", link)
+        formatted_links.append(formatted_link[0])
+
+    return formatted_links
 
 
 def test_stored_posterior(urls):
@@ -120,7 +126,9 @@ def test_stored_posterior(urls):
     executed
     """
 
-    scan_result = {}
+    scan_result = []
+
+    # Here we make post requests to send data only
     for url in urls:
         session = requests.session()
         front = session.get(url)
@@ -130,31 +138,41 @@ def test_stored_posterior(urls):
             cookies = session.cookies
 
             inputs = locate_input_points(front.text)
+            p_urls = post_urls(front.text)
 
-            post_link = post_url(front.text)
-            for name in inputs:
-                data = {name: url+" {{7*7}} "+random_string, "_token": token}
-                requests.post(post_link, data=data, cookies=cookies)
+            for post_url in p_urls:
+                for name in inputs:
+                    # data = {name: url+" {{7*7}} "+random_string, "_token": token}
+                    # requests.post(post_link, data=data, cookies=cookies)
+                    data = {name: post_url + " {{7*7}} " + random_string, "_token": token}
+                    requests.post(post_url, data=data, cookies=cookies)
         except:
             continue
 
+
+    # Here we check all the urls to try and find the data we posted previously
     for next_url in urls:
         html_to_inspect = str(get_html(next_url))
         req_line = ''
+        origin_url = ''
 
-        # Check if the randomly generated string at the beginning is in the HTML
-        if(random_string in html_to_inspect):
-            for line in html_to_inspect.split("\n"):
-                if(random_string in line):
-                    req_line = line  # Save line once found
+        try:
 
-            origin_url = re.findall(r"(http://[a-zA-Z0-9_:;=./\'\\\\]+)", req_line)
-            if("49" in req_line):
-                scan_result[next_url] = "True, Origin From: " + str(origin_url[0]) + " Executed on: " + str(next_url)
-            else:
-                scan_result[next_url] = False
-        else:
-            scan_result[next_url] = False
+            # Check if the randomly generated string at the beginning is in the HTML
+            if(random_string in html_to_inspect):
+                for line in html_to_inspect.split("\n"):
+                    if(random_string in line):
+                        req_line = line  # Save line once found
+
+                # Find all URLS on a page that are equal to req_line (the URL we are looking for)
+                origin_url = re.findall(r"(http://[a-zA-Z0-9_:;=./\'\\\\]+)", req_line)
+                if("49" in req_line):
+                    scan_result.append("SSTI succeeded, Origin From: " + str(origin_url[0]) + " Executed on: " + str(next_url))
+                else:
+                    scan_result.append("SSTI tested from: " + str(origin_url[0]) + " was unsuccessful")
+        except IndexError:
+            scan_result.append("URL: " + next_url + " isVulnerable: Unable to test, no input points found")
+            continue
 
     return scan_result
 
@@ -170,4 +188,4 @@ filtered_urls = filter_links(urls+nested_links)
 stored_pos_results = test_stored_posterior(filtered_urls)
 
 for result in stored_pos_results:  # print results
-   print("Input name: " + result + " isVulnerable: " + str(stored_pos_results[result]))
+    print(result)

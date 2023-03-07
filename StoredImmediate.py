@@ -102,6 +102,19 @@ def locate_input_points(html):
 
     return final_names
 
+def post_urls(html):
+    """
+    This function finds all form action links in a page, and returns only the required form action links
+    """
+    post_links = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)
+    formatted_links = []
+
+    for link in post_links:
+        formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", link)
+        formatted_links.append(formatted_link[0])
+
+    return formatted_links
+
 
 def test_stored_immediate(urls):
     """
@@ -109,7 +122,7 @@ def test_stored_immediate(urls):
     executed. This function performs differently as it assesses SSTI based on how long the request takes to complete.
     """
 
-    scan_result = {}
+    scan_result = []
     for url in urls:
         session = requests.session()
         front = session.get(url)
@@ -119,26 +132,27 @@ def test_stored_immediate(urls):
             cookies = session.cookies
 
             inputs = locate_input_points(front.text)
+            p_urls = post_urls(front.text)
 
-            for name in inputs:
-                data = {name: "{{7*7}} @php sleep(1); @endphp", "_token": token}
-                start = time.time()
-                req = requests.post(url, data=data, cookies=cookies)
-                print(url)
-                print(req.text)
-                end = time.time()
+            for post_url in p_urls:
+                for name in inputs:
+                    data = {name: "{{7*7}} @php sleep(10); @endphp", "_token": token}
+                    start = time.time()
+                    req = requests.post(post_url, data=data, cookies=cookies)
+                    end = time.time()
 
-                # If it's visible, we consider that this is reflected injection and not stored immediate injection
-                if("49" in req.text):
-                    scan_result[name] = False
+                    # If it's visible, we consider that this is reflected injection and not stored immediate injection
+                    if("49" in req.text):
+                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: False")
+                        continue
 
-                if(end-start >= 10):
-                    scan_result[name] = True
-                else:
-                    scan_result[name] = False
+                    # Request took 10 or more seconds, therefore we can deduce that SSTI was successful
+                    if(end-start >= 10):
+                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: True")
+                    else:
+                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: False")
         except:
-            print("we are here: " + url)
-            scan_result[url] = False
+            scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
             continue
 
 
@@ -163,4 +177,4 @@ filtered_urls = filter_links(urls+nested_links)
 stored_imm_results = test_stored_immediate(filtered_urls)
 
 for result in stored_imm_results:  # print results
-   print("input name: " + result + " isVulnerable: " + str(stored_imm_results[result]))
+   print(result)
