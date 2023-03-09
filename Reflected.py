@@ -1,6 +1,7 @@
 import re
 import urllib.request
 import requests
+import numpy
 
 
 def begin_scan():
@@ -59,8 +60,8 @@ def locate_input_points(html):
     """
 
     # find all input tags including token
-    input_collection = re.findall(r"(<input [a-zA-Z0-9 _=\"'\\\\]*>)+", str(html))
-    textarea_collection = re.findall(r"(<textarea [a-zA-Z0-9 _:;=\"'\\\\]*>)+", str(html))
+    input_collection = re.findall(r"(<input [a-zA-Z0-9 _=\"\-'\\\\]*>)+", str(html))
+    textarea_collection = re.findall(r"(<textarea [a-zA-Z0-9 _:;=\"\-'\\\\]*>)+", str(html))
     total_inputs = input_collection + textarea_collection
 
     all_names = []  # array containing necessary input tags which will be used later
@@ -71,7 +72,7 @@ def locate_input_points(html):
             total_inputs.remove(elem)
 
     for inp in total_inputs:  # filter through remaining valid inputs storing the names
-        all_names = re.findall(r"(name=[\\\\'a-zA-Z0-9\"'\\\\']+)", str(inp))
+        all_names += re.findall(r"(name=[\\\\'a-zA-Z0-9\"'\\\\']+)", str(inp))
 
     final_names = []
     for elem in all_names:  # Clean names
@@ -91,18 +92,43 @@ def filter_links(all_urls):
     return all_urls
 
 
-def post_urls(html):
+def post_url(html):
     """
     This function finds all form action links in a page, and returns only the required form action links
     """
-    post_links = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)
-    formatted_links = []
+    post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
+    #formatted_links = []
 
-    for link in post_links:
-        formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", link)
-        formatted_links.append(formatted_link[0])
+    #for link in post_links:
+    formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
+    #formatted_links.append(formatted_link[0])
 
-    return formatted_links
+    return formatted_link
+
+
+def get_token(html):
+    """
+    This function grabs the token for each given form
+    """
+    token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', html)[0]
+    return token
+
+
+def get_forms(html):
+    """
+    This function takes html and finds all forms and their encapsulated html. It will extract action links and their inputs
+    and pair them together.
+    """
+    form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s'\\\\]+</form>)+", html)
+
+    link_groups = {}
+    for group in form_groups:
+        action_link = post_url(group)
+        input_links = locate_input_points(group)
+        link_groups[action_link] = input_links
+
+    return link_groups
+
 
 def test_reflected(urls):
     """
@@ -116,30 +142,54 @@ def test_reflected(urls):
         front = session.get(url)
 
         try:
-            token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', front.text)[0]
+            token = get_token(front.text)
             cookies = session.cookies
 
-            inputs = locate_input_points(front.text)
-            p_urls = post_urls(front.text)
+            post_data = {}
+            groups = get_forms(front.text)
 
-            for post_url in p_urls:
-                for name in inputs:
-                    data = {name: "{{7*7}}", "_token": token}
-                    req = requests.post(post_url, data=data, cookies=cookies)
+            for group in groups:
+                # Get the inputs for each form group iteratively
+                inputs = groups[group]
+                for inp in inputs:  # Give each input a value and add to dictionary
+                    post_data[inp] = "{{7*7}}"
 
-                    # Check that an error is not thrown due to GET route, skip rest of code execution
-                    if("methodNotAllowed" in req.text):
-                        scan_result.append("URL: " + url + " isVulnerable: Unable to test, only GET is supported")
-                        continue
+                post_data["_token"] = token  # Add token last
+                req = requests.post(group, data=post_data, cookies=cookies)
 
-                    if "49" in req.text:
-                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: True")
-                    else:
-                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: False")
+                # Check that an error is not thrown due to GET route, skip rest of code execution
+                if ("methodNotAllowed" in req.text):
+                    scan_result.append("URL: " + url + " isVulnerable: Unable to test, only GET is supported")
+                    continue
+
+                if "49" in req.text:
+                    scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: True")
+                else:
+                    scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
         except IndexError:  # A page had no inputs we could find
             scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
 
     return scan_result
+
+
+    #         for post_url in p_urls:
+    #             for name in inputs:
+    #                 data = {name: "{{7*7}}", "_token": token}
+    #                 req = requests.post(post_url, data=data, cookies=cookies)
+    #
+    #                 # Check that an error is not thrown due to GET route, skip rest of code execution
+    #                 if("methodNotAllowed" in req.text):
+    #                     scan_result.append("URL: " + url + " isVulnerable: Unable to test, only GET is supported")
+    #                     continue
+    #
+    #                 if "49" in req.text:
+    #                     scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: True")
+    #                 else:
+    #                     scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: False")
+    #     except IndexError:  # A page had no inputs we could find
+    #         scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
+    #
+    # return scan_result
 
 
 # Begin the scanning process

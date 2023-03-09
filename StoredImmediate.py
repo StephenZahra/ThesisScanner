@@ -80,8 +80,8 @@ def locate_input_points(html):
     """
 
     # find all input tags including token
-    input_collection = re.findall(r"(<input [a-zA-Z0-9 _=\"'\\\\]*>)+", str(html))
-    textarea_collection = re.findall(r"(<textarea [a-zA-Z0-9 _:;=\"'\\\\]*>)+", str(html))
+    input_collection = re.findall(r"(<input [a-zA-Z0-9 _=\"\-'\\\\]*>)+", str(html))
+    textarea_collection = re.findall(r"(<textarea [a-zA-Z0-9 _:;=\"\-'\\\\]*>)+", str(html))
     total_inputs = input_collection + textarea_collection
 
     all_names = []  # array containing necessary input tags which will be used later
@@ -92,7 +92,7 @@ def locate_input_points(html):
             total_inputs.remove(elem)
 
     for inp in total_inputs:  # filter through remaining valid inputs storing the names
-        all_names = re.findall(r"(name=[\\\\'a-zA-Z0-9\"'\\\\']+)", inp)
+        all_names += re.findall(r"(name=[\\\\'a-zA-Z0-9\"'\\\\']+)", inp)
 
     final_names = []
     for elem in all_names:  # Clean names
