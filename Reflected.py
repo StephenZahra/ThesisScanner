@@ -172,26 +172,6 @@ def test_reflected(urls):
     return scan_result
 
 
-    #         for post_url in p_urls:
-    #             for name in inputs:
-    #                 data = {name: "{{7*7}}", "_token": token}
-    #                 req = requests.post(post_url, data=data, cookies=cookies)
-    #
-    #                 # Check that an error is not thrown due to GET route, skip rest of code execution
-    #                 if("methodNotAllowed" in req.text):
-    #                     scan_result.append("URL: " + url + " isVulnerable: Unable to test, only GET is supported")
-    #                     continue
-    #
-    #                 if "49" in req.text:
-    #                     scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: True")
-    #                 else:
-    #                     scan_result.append("URL: " + post_url + " Input name: " + name + " isVulnerable: False")
-    #     except IndexError:  # A page had no inputs we could find
-    #         scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
-    #
-    # return scan_result
-
-
 # Begin the scanning process
 html = begin_scan()
 

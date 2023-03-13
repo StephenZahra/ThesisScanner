@@ -180,7 +180,7 @@ def get_forms(html):
 
 def test_stored_immediate(urls):
     """
-    This function performs SSTI on a given target url for all forms, and checks each page to verify if any of it has
+    This function performs SSTI on all forms for all urls, and checks each page to verify if any of it has
     executed. This function performs differently as it assesses SSTI based on how long the request takes to complete.
     """
 
@@ -221,15 +221,6 @@ def test_stored_immediate(urls):
         except IndexError:
             scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
             continue
-
-
-        # for next_url in urls:
-        #     html = get_html(next_url)
-        #
-        #     if("49" in str(html)):
-        #
-        #     else:
-        #         scan_result[next_url] = False
 
     return scan_result
 

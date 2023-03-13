@@ -180,7 +180,6 @@ def test_stored_posterior(urls):
     for next_url in urls:
         html_to_inspect = str(get_html(next_url))
         req_line = ''
-        origin_url = ''
 
         try:
             #Check if the randomly generated string at the beginning is in the HTML
