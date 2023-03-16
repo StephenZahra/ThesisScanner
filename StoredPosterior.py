@@ -110,8 +110,8 @@ def post_url(html):
     """
     This function finds all form action links in a page, and returns only the required form action links
     """
+
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
-    #formatted_links = []
 
     #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
@@ -124,6 +124,7 @@ def get_token(html):
     """
     This function grabs the token for each given form
     """
+
     token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', html)[0]
     return token
 
@@ -133,6 +134,7 @@ def get_forms(html):
     This function takes html and finds all forms and their encapsulated html. It will extract action links and their inputs
     and pair them together.
     """
+
     form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s'\\\\]+</form>)+", html)
 
     link_groups = {}
@@ -168,7 +170,7 @@ def test_stored_posterior(urls):
                 # Get the inputs for each form group iteratively
                 inputs = groups[group]
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = group + " {{7*7}} " + random_string
+                    post_data[inp] = url + " " + group + " {{7*7}} " + random_string
 
                 post_data["_token"] = token  # Add token last
                 requests.post(group, data=post_data, cookies=cookies)
@@ -189,11 +191,11 @@ def test_stored_posterior(urls):
                         req_line = line  # Save line once found
 
                 # Find all URLS on a page that are equal to req_line (the URL we are looking for)
-                origin_url = re.findall(r"(http://[a-zA-Z0-9_:;=./\'\\\\]+)", req_line)
+                origin_urls = re.findall(r"(http://[a-zA-Z0-9_:;=./\'\\\\]+)", req_line)
                 if("49" in req_line):
-                    scan_result.append("SSTI succeeded, Origin From: " + str(origin_url[0]) + " Executed on: " + str(next_url))
+                    scan_result.append("SSTI succeeded, Origin Page: " + str(origin_urls[1]) + " Origin Form: " + str(origin_urls[0]) + " Executed on: " + str(next_url))
                 else:
-                    scan_result.append("SSTI tested from: " + str(origin_url[0]) + " was unsuccessful")
+                    scan_result.append("SSTI tested from: " + str(origin_urls[0]) + " was unsuccessful")
             elif (html_to_inspect.find(random_string) == -1 and html_to_inspect.find("49") == -1):  # If we find no unique string or 49 in the html
                 scan_result.append("SSTI tested from: " + next_url + " was unsuccessful")
         except IndexError:

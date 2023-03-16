@@ -97,7 +97,6 @@ def post_url(html):
     This function finds all form action links in a page, and returns only the required form action links
     """
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
-    #formatted_links = []
 
     #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]

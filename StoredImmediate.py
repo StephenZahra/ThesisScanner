@@ -79,7 +79,6 @@ def post_url(html):
     This function finds all form action links in a page, and returns only the required form action links
     """
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
-    #formatted_links = []
 
     #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
@@ -144,8 +143,8 @@ def post_url(html):
     """
     This function finds all form action links in a page, and returns only the required form action links
     """
+
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
-    #formatted_links = []
 
     #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
@@ -158,6 +157,7 @@ def get_token(html):
     """
     This function grabs the token for each given form
     """
+
     token = re.findall(r'<input type="hidden" name="_token" value="(.*)"', html)[0]
     return token
 
@@ -167,6 +167,7 @@ def get_forms(html):
     This function takes html and finds all forms and their encapsulated html. It will extract action links and their inputs
     and pair them together.
     """
+
     form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s'\\\\]+</form>)+", html)
 
     link_groups = {}
