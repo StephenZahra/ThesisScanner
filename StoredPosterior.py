@@ -148,7 +148,7 @@ def get_forms(html):
 
 def test_stored_posterior(urls):
     """
-    This function performs SSTI on a given target url for all forms, and checks each page to verify if any of it has
+    This function performs SSTI on all forms in pages, and checks each page to verify if any of it has
     executed
     """
 

