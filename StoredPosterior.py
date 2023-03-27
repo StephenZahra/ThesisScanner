@@ -1,4 +1,5 @@
 import re
+import sys
 import urllib.request
 import requests
 import random
@@ -6,17 +7,6 @@ import string
 
 # Generate a random string to uniquely identify every instance of Stored Posterior SSTI generated from this script
 random_string = ''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase, k=10))
-
-def begin_scan():
-    """
-    Begins the scanning process by getting the html for a given site
-    """
-
-    url = input("Please enter a url: ")
-    response = urllib.request.urlopen(url)
-    html = response.read()
-
-    return html
 
 
 def get_html(url):
@@ -28,24 +18,6 @@ def get_html(url):
     html = response.read()
 
     return html
-
-
-def get_page_urls(html):
-    """
-    This function gets all href data in <a> tags and verifies which of them are in the current domain and removes extra
-    characters if so
-    """
-
-    link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
-
-    required_links = []
-    for link in link_collection:
-        if (link.find("127.0.0.1:8000") != -1):
-            modif_link = link.replace("href=\"", '')
-            modif_link = modif_link.replace("\"", '')
-            required_links.append(modif_link)
-
-    return required_links
 
 
 def check_nested_links(required_links):
@@ -170,7 +142,7 @@ def test_stored_posterior(urls):
                 # Get the inputs for each form group iteratively
                 inputs = groups[group]
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = url + " " + group + " {{7*7}} " + random_string
+                    post_data[inp] = url + " " + group + "ssti test {{7*7}} " + random_string
 
                 post_data["_token"] = token  # Add token last
                 requests.post(group, data=post_data, cookies=cookies)
@@ -192,7 +164,7 @@ def test_stored_posterior(urls):
 
                 # Find all URLS on a page that are equal to req_line (the URL we are looking for)
                 origin_urls = re.findall(r"(http://[a-zA-Z0-9_:;=./\'\\\\]+)", req_line)
-                if("49" in req_line):
+                if("ssti test 49" in req_line):
                     scan_result.append("SSTI succeeded, Origin Page: " + str(origin_urls[1]) + " Origin Form: " + str(origin_urls[0]) + " Executed on: " + str(next_url))
                 else:
                     scan_result.append("SSTI tested from: " + str(origin_urls[0]) + " was unsuccessful")
@@ -205,15 +177,9 @@ def test_stored_posterior(urls):
     return scan_result
 
 
-
-# Begin the scanning process
-html = begin_scan()
-
-urls = get_page_urls(html)
-
-nested_links = check_nested_links(urls)
-filtered_urls = filter_links(urls+nested_links)
-stored_pos_results = test_stored_posterior(filtered_urls)
+urls = sys.argv[1]
+urls_list = list(urls.split(" "))
+stored_pos_results = test_stored_posterior(urls_list)
 
 for result in stored_pos_results:  # print results
     print(result)

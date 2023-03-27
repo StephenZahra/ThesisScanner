@@ -1,69 +1,7 @@
 import re
-import urllib.request
+import sys
 import requests
 import subprocess
-
-
-def begin_scan():
-    """
-    Begins the scanning process by getting the html for a given site
-    """
-
-    url = input("Please enter a url: ")
-    response = urllib.request.urlopen(url)
-    html = response.read()
-
-    return html
-
-
-def get_html(url):
-    """
-    This function acquires the html for any given url
-    """
-
-    response = urllib.request.urlopen(url)
-    html = response.read()
-
-    return html
-
-
-def get_page_urls(html):
-    """
-    This function gets all href data in <a> tags and verifies which of them are in the current domain and removes extra
-    characters if so
-    """
-
-    link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
-
-    required_links = []
-    for link in link_collection:
-        if (link.find("127.0.0.1:8000") != -1):
-            modif_link = link.replace("href=\"", '')
-            modif_link = modif_link.replace("\"", '')
-            required_links.append(modif_link)
-
-    return required_links
-
-
-def check_nested_links(required_links):
-    """
-    This function iterates through collected links and checks for new ones in them
-    """
-
-    nested_links = []
-    for url in required_links:
-        response = urllib.request.urlopen(url)
-        html = response.read()
-
-        link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
-
-        for link in link_collection:
-            if (link.find("127.0.0.1:8000") != -1):
-                modif_link = link.replace("href=\"", '')
-                modif_link = modif_link.replace("\"", '')
-                nested_links.append(modif_link)
-    return nested_links
-
 
 def locate_input_points(html):
     """
@@ -182,7 +120,6 @@ def test_blind_posterior(urls):
         except IndexError:
             continue
 
-
     server_instance = subprocess.Popen(['python', 'SocketServer.py', ' '.join(urls)])
     while server_instance.poll() is None:
         if(server_instance.poll() != None):
@@ -190,11 +127,6 @@ def test_blind_posterior(urls):
         pass
 
 
-# Begin the scanning process
-html = begin_scan()
-
-urls = get_page_urls(html)
-
-nested_links = check_nested_links(urls)
-filtered_urls = filter_links(urls+nested_links)
-test_blind_posterior(filtered_urls)
+urls = sys.argv[1]
+urls_list = list(urls.split(" "))
+test_blind_posterior(urls_list)

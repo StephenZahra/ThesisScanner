@@ -1,70 +1,7 @@
 import re
+import sys
 import time
-import urllib.request
 import requests
-import subprocess
-
-
-def begin_scan():
-    """
-    Begins the scanning process by getting the html for a given site
-    """
-
-    url = input("Please enter a url: ")
-    response = urllib.request.urlopen(url)
-    html = response.read()
-
-    return html
-
-
-def get_html(url):
-    """
-    This function acquires the html for any given url
-    """
-
-    response = urllib.request.urlopen(url)
-    html = response.read()
-
-    return html
-
-
-def get_page_urls(html):
-    """
-    This function gets all href data in <a> tags and verifies which of them are in the current domain and removes extra
-    characters if so
-    """
-
-    link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
-
-    required_links = []
-    for link in link_collection:
-        if (link.find("127.0.0.1:8000") != -1):
-            modif_link = link.replace("href=\"", '')
-            modif_link = modif_link.replace("\"", '')
-            required_links.append(modif_link)
-
-    return required_links
-
-
-def check_nested_links(required_links):
-    """
-    This function iterates through collected links and checks for new ones in them
-    """
-
-    nested_links = []
-    for url in required_links:
-        response = urllib.request.urlopen(url)
-        html = response.read()
-
-        link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
-
-        for link in link_collection:
-            if (link.find("127.0.0.1:8000") != -1):
-                modif_link = link.replace("href=\"", '')
-                modif_link = modif_link.replace("\"", '')
-                nested_links.append(modif_link)
-    return nested_links
-
 
 def locate_input_points(html):
     """
@@ -149,7 +86,6 @@ def test_blind_immediate(urls):
     """
 
     scan_result = []
-    sleep_time = 5
     for url in urls:
         session = requests.session()
         front = session.get(url)
@@ -166,7 +102,7 @@ def test_blind_immediate(urls):
                 inputs = groups[group]
 
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = group + " {{7*7}} " + "@php sleep("+str(sleep_time)+"); @endphp"
+                    post_data[inp] = group + "ssti test {{7*7}} " + "@php sleep(10); @endphp"
 
                 post_data["_token"] = token  # Add token last
                 start = time.time()
@@ -175,12 +111,12 @@ def test_blind_immediate(urls):
 
 
                 # If it's visible, we consider that this is reflected injection and not stored immediate injection
-                if ("49" in req.text):
+                if ("ssti test 49" in req.text):
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
                     continue
 
-                # Request took double the amount of time of the sleep, therefore we can deduce that SSTI was successful
-                if (end - start >= sleep_time*2):
+                # Request took more than 10 but less than 12 seconds, this check ensures that this is not stored immediate SSTI
+                if (end - start >= 10 and end-start < 12):
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: True")
                 else:
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
@@ -191,15 +127,9 @@ def test_blind_immediate(urls):
     return scan_result
 
 
+urls = sys.argv[1]
+urls_list = list(urls.split(" "))
+blind_imm_results = test_blind_immediate(urls_list)
 
-# Begin the scanning process
-html = begin_scan()
-
-urls = get_page_urls(html)
-
-nested_links = check_nested_links(urls)
-filtered_urls = filter_links(urls+nested_links)
-stored_imm_results = test_blind_immediate(filtered_urls)
-
-for result in stored_imm_results:  # print results
+for result in blind_imm_results:  # print results
     print(result)

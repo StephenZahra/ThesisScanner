@@ -26,7 +26,7 @@ while True:
 
     urls_in_string = re.findall(r"http://[a-zA-z0-9.:/]+", str(alert))  # getting all urls found in the alert we receive
     if not (urls_in_string[2] in urls_list):  # making sure that the third url (where injection occurs) is not a url that has been found through requests (not actually a blind area)
-        print(alert)
+        print(alert.decode("utf-8"))
     else:
         print("Connection received from page with reflected injection, this is not blind SSTI")
 
