@@ -3,6 +3,25 @@ import sys
 import requests
 import subprocess
 
+
+def get_page_urls(html):
+    """
+    This function gets all href data in <a> tags and verifies which of them are in the current domain and removes extra
+    characters if so
+    """
+
+    link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
+
+    required_links = []
+    for link in link_collection:
+        if (link.find("127.0.0.1:8000") != -1):
+            modif_link = link.replace("href=\"", '')
+            modif_link = modif_link.replace("\"", '')
+            required_links.append(modif_link)
+
+    return required_links
+
+
 def locate_input_points(html):
     """
     This function finds all text input tags and returns their names
@@ -81,12 +100,30 @@ def get_forms(html):
     return link_groups
 
 
+def check_login_form(form_groups):
+    """This function will check a collection of form groups to check if a login form is present in one of them"""
+
+    for group in form_groups:  # Check each form group
+        inputs = form_groups[group]
+
+        for inp in inputs:  # Check each input of each form group
+            if "password" in inp:  # If an input has a password field than we return the whole group
+                return group, inputs
+
+    return "0", 0
+
+
+
 def test_blind_posterior(urls):
     """
     This function performs SSTI on all forms in pages. This works by sending a connection request to a socket
     server that will run after all forms have been filled. The socket server will then confirm injection success based
     on if a connection is received or not.
     """
+
+    login_url = ""
+    login_inputs = {}
+    token = ""
 
     for url in urls:
         session = requests.session()
@@ -98,6 +135,9 @@ def test_blind_posterior(urls):
 
             post_data = {}
             groups = get_forms(front.text)
+
+            login_url, login_inputs = check_login_form(groups)
+
 
             for group in groups:
                 # Get the inputs for each form group iteratively
@@ -121,10 +161,39 @@ def test_blind_posterior(urls):
             continue
 
     server_instance = subprocess.Popen(['python', 'SocketServer.py', ' '.join(urls)])
-    while server_instance.poll() is None:
-        if(server_instance.poll() != None):
-            break
-        pass
+    # while server_instance.poll() is None:
+    #     if(server_instance.poll() != None):
+    #         break
+    #     pass
+
+    login_creds = sys.argv[1]  # Getting the login credentials inputted at the beginning
+    blind_data = {}
+
+    for inpt in login_inputs:  # For each input found in the login form
+        count = 0
+        blind_data[inpt] = login_creds[count]  # use the name of the input and inputted credential
+        count+=1
+
+
+    blind_session = requests.session()  # Create a blind session
+    blind_cookies = blind_session.cookies
+
+    login_page = blind_session.get(login_url)  # Get the login page html
+
+    login_token = get_token(login_page.text)  # Extract the form token
+    blind_data["_token"] = login_token
+
+    login_response = blind_session.post(login_url, blind_data, blind_cookies)  # Performing login
+
+    if(login_response.status_code == 200):  # Login successful
+        front = login_response.text
+        new_urls = get_page_urls(front)
+
+        # continue here, find new urls and filter from previously found URLs, and visit them
+    else:
+        print("\n\nFailed to authenticate to perform blind scan. The scan will now stop\n\n")
+
+
 
 
 urls = sys.argv[1]

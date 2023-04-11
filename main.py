@@ -8,7 +8,16 @@ print(" |___/___/ |_| |___|  |___/\__\__,_|_||_|_||_\___|_|")
 
 print("\n\nTo test on pages secured by authentication, the scanner requires valid user credentials\n\n")
 
-cred_choice = input("Press 1 to input credentials or 2 to skip this step: ")
+cred_choice = ""
+
+while(True):
+    cred_choice = input("Press 1 to input credentials or 2 to skip this step: ")
+
+    if(cred_choice == "1" or cred_choice == "2"):
+        break
+    else:
+        print("\nInvalid input, please try again\n\n")
+
 
 creds = {}
 if(cred_choice == "1"):  # User decides to enter credentials
