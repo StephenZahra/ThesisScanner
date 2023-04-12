@@ -1,7 +1,10 @@
 import re
 import sys
+import time
+
 import requests
 import subprocess
+import urllib.request
 
 
 def get_page_urls(html):
@@ -100,18 +103,49 @@ def get_forms(html):
     return link_groups
 
 
-def check_login_form(form_groups):
+def check_login_form(form_groups, login_page_url):
     """This function will check a collection of form groups to check if a login form is present in one of them"""
 
     for group in form_groups:  # Check each form group
         inputs = form_groups[group]
 
         for inp in inputs:  # Check each input of each form group
-            if "password" in inp:  # If an input has a password field than we return the whole group
-                return group, inputs
+            if "password" in inp:  # If an input has a password field than we return the whole group, inputs and page url
+                return group, inputs, login_page_url, True
 
-    return "0", 0
+    return "0", 0, "0", False
 
+
+def check_nested_links(required_links):
+    """
+    Iterates through collected links and checks for new ones in them
+    """
+
+    nested_links = []
+    for url in required_links:
+        response = urllib.request.urlopen(url)
+        html = response.read()
+
+        link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
+
+        for link in link_collection:
+            if (link.find("127.0.0.1:8000") != -1):
+                modif_link = link.replace("href=\"", '')
+                modif_link = modif_link.replace("\"", '')
+                nested_links.append(modif_link)
+    return nested_links
+
+
+def filter_links(all_urls):
+    """
+    This function checks for duplicates in the total collection of links in the website and removes them
+    """
+
+    output = ""
+    all_urls = list(dict.fromkeys(all_urls))
+    for url in all_urls:
+        output += url + "|"
+    return output
 
 
 def test_blind_posterior(urls):
@@ -121,9 +155,10 @@ def test_blind_posterior(urls):
     on if a connection is received or not.
     """
 
-    login_url = ""
+    login_found = False
+    login_page_url = ""
+    login_form_url = ""
     login_inputs = {}
-    token = ""
 
     for url in urls:
         session = requests.session()
@@ -136,7 +171,10 @@ def test_blind_posterior(urls):
             post_data = {}
             groups = get_forms(front.text)
 
-            login_url, login_inputs = check_login_form(groups)
+            # Check if we have already been to the login page to avoid overriding the values, also avoid the registration page
+            if("register" not in front.text):
+                if(login_found == False):
+                    login_form_url, login_inputs, login_page_url, login_found = check_login_form(groups, url)
 
 
             for group in groups:
@@ -160,36 +198,63 @@ def test_blind_posterior(urls):
         except IndexError:
             continue
 
-    server_instance = subprocess.Popen(['python', 'SocketServer.py', ' '.join(urls)])
+
+    print("getting login credentials inputted at beginning")
+    cred_names = sys.argv[2]  # Getting the login credentials inputted at the beginning
+    cred_vals = sys.argv[3]
+
+    name_array = cred_names.split(" ")
+    val_array = cred_vals.split(" ")
+
+    blind_data = {}
+
+    input_count = 0
+    for inpt in login_inputs:  # For each input found in the login form
+        blind_data[name_array[input_count]] = val_array[input_count]  # use cred name & val arrays to get inputted names and values
+        input_count+=1
+        #  Can validate count of inputs vs inputs received by the user here
+
+    blind_session = requests.session()  # Create a blind session
+
+    login_page = blind_session.get(login_page_url)  # Get the login page html
+    blind_cookies = blind_session.cookies
+
+    login_token = get_token(login_page.text)  # Extract the form token
+    blind_data["_token"] = login_token
+
+
+
+    # CONTINUE SOMEWHERE AROUND HERE
+    login_response = blind_session.post(login_form_url, blind_data, blind_cookies)  # Performing login
+    print("performed login")
+
+    # Start up the socket server
+    server_instance = subprocess.Popen(['python', 'SocketServer.py'])# ' '.join(urls)])
     # while server_instance.poll() is None:
     #     if(server_instance.poll() != None):
     #         break
     #     pass
 
-    login_creds = sys.argv[1]  # Getting the login credentials inputted at the beginning
-    blind_data = {}
-
-    for inpt in login_inputs:  # For each input found in the login form
-        count = 0
-        blind_data[inpt] = login_creds[count]  # use the name of the input and inputted credential
-        count+=1
-
-
-    blind_session = requests.session()  # Create a blind session
-    blind_cookies = blind_session.cookies
-
-    login_page = blind_session.get(login_url)  # Get the login page html
-
-    login_token = get_token(login_page.text)  # Extract the form token
-    blind_data["_token"] = login_token
-
-    login_response = blind_session.post(login_url, blind_data, blind_cookies)  # Performing login
-
     if(login_response.status_code == 200):  # Login successful
+        print("login was successful")
         front = login_response.text
         new_urls = get_page_urls(front)
 
-        # continue here, find new urls and filter from previously found URLs, and visit them
+        nested_links = check_nested_links(new_urls)  # Check for links inside the new pages
+        filtered_urls = filter_links(urls + new_urls + nested_links)  # Form a collection of urls we've seen so far and new ones
+        print("filtered URLs: ", filtered_urls)
+
+        to_scan = []
+        for unique_url in filtered_urls:
+            if(unique_url not in urls):  # If the current URL is not present in the list of URLs we have already seen
+                to_scan.append(unique_url)
+
+        print("commencing visit of remaining URLs")
+        for blind_url in to_scan:  # visit URLs
+            blind_session.get(blind_url)
+            time.sleep(1)  # give the socket server time to process
+
+        server_instance.terminate()
     else:
         print("\n\nFailed to authenticate to perform blind scan. The scan will now stop\n\n")
 

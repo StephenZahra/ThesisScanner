@@ -19,7 +19,8 @@ while(True):
         print("\nInvalid input, please try again\n\n")
 
 
-creds = {}
+cred_names = []
+cred_vals = []
 if(cred_choice == "1"):  # User decides to enter credentials
     counter = 1
     finished = False
@@ -42,7 +43,8 @@ if(cred_choice == "1"):  # User decides to enter credentials
             else:
                 break
 
-        creds.update({cred_name: cred_val})
+        cred_names.append(cred_name)
+        cred_vals.append(cred_val)
         counter+=1
 
         while(True):  # Check if user is finished from credential input
@@ -56,7 +58,7 @@ if(cred_choice == "1"):  # User decides to enter credentials
                 print("\nInvalid input, please try again\n\n")
 
 
-print("Scanning for URLs")
+print("\n\nScanning for URLs")
 print("Please enter an entry point URL: ")
 urls = subprocess.Popen(['python',  'URLFinder.py'], stdout=subprocess.PIPE)
 encoded = urls.communicate()
@@ -65,6 +67,7 @@ url_string = encoded[0].decode("utf-8")
 
 url_array = url_string.split("|")  # splitting the incoming string
 url_array.pop(-1)   # removing the final element as it is not a URL
+
 
 # print("\n\nTesting Reflected SSTI")
 # subprocess.run(['python', 'Reflected.py', ' '.join(url_array)])
@@ -77,7 +80,7 @@ url_array.pop(-1)   # removing the final element as it is not a URL
 
 if(cred_choice == "1"):
     print("\n\nTesting Blind SSTI with Posterior Injection and Rendering")
-    subprocess.run(['python', 'BlindPosterior.py', ' '.join(url_array), ' '.join(creds)])
+    subprocess.run(['python', 'BlindPosterior.py', ' '.join(url_array), ' '.join(cred_names), ' '.join(cred_vals)])
 
-    print("\n\nTesting Blind SSTI with Immediate Injection and Rendering")
-    subprocess.run(['python', 'BlindImmediate.py', ' '.join(url_array), ' '.join(creds)])
+    # print("\n\nTesting Blind SSTI with Immediate Injection and Rendering")
+    # subprocess.run(['python', 'BlindImmediate.py', ' '.join(url_array)])
