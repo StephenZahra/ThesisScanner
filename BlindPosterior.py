@@ -199,7 +199,6 @@ def test_blind_posterior(urls):
             continue
 
 
-    print("getting login credentials inputted at beginning")
     cred_names = sys.argv[2]  # Getting the login credentials inputted at the beginning
     cred_vals = sys.argv[3]
 
@@ -222,42 +221,31 @@ def test_blind_posterior(urls):
     login_token = get_token(login_page.text)  # Extract the form token
     blind_data["_token"] = login_token
 
-
-
-    # CONTINUE SOMEWHERE AROUND HERE
     login_response = blind_session.post(login_form_url, blind_data, blind_cookies)  # Performing login
-    print("performed login")
 
     # Start up the socket server
     server_instance = subprocess.Popen(['python', 'SocketServer.py'])# ' '.join(urls)])
-    # while server_instance.poll() is None:
-    #     if(server_instance.poll() != None):
-    #         break
-    #     pass
 
     if(login_response.status_code == 200):  # Login successful
-        print("login was successful")
         front = login_response.text
         new_urls = get_page_urls(front)
 
         nested_links = check_nested_links(new_urls)  # Check for links inside the new pages
         filtered_urls = filter_links(urls + new_urls + nested_links)  # Form a collection of urls we've seen so far and new ones
-        print("filtered URLs: ", filtered_urls)
+        split_urls = list(filtered_urls.split("|"))  # split the filtered_urls string
 
         to_scan = []
-        for unique_url in filtered_urls:
+        for unique_url in split_urls:
             if(unique_url not in urls):  # If the current URL is not present in the list of URLs we have already seen
                 to_scan.append(unique_url)
+        to_scan.pop(-1)  # Removing the last element as it is an empty string
 
-        print("commencing visit of remaining URLs")
         for blind_url in to_scan:  # visit URLs
             blind_session.get(blind_url)
-            time.sleep(1)  # give the socket server time to process
 
         server_instance.terminate()
     else:
         print("\n\nFailed to authenticate to perform blind scan. The scan will now stop\n\n")
-
 
 
 
