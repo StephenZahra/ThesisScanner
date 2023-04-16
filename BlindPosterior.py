@@ -1,7 +1,5 @@
 import re
 import sys
-import time
-
 import requests
 import subprocess
 import urllib.request
@@ -65,7 +63,7 @@ def filter_links(all_urls):
 
 def post_url(html):
     """
-    This function finds all form action links in a page, and returns only the required form action links
+    This function finds all form action links in given html
     """
 
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
@@ -109,9 +107,10 @@ def check_login_form(form_groups, login_page_url):
     for group in form_groups:  # Check each form group
         inputs = form_groups[group]
 
-        for inp in inputs:  # Check each input of each form group
-            if "password" in inp:  # If an input has a password field than we return the whole group, inputs and page url
-                return group, inputs, login_page_url, True
+        if(len(inputs) == 2):  # Checking that the count of form inputs is 2 indicating a login form as they generally require 2 inputs
+            for inp in inputs:  # Check each input of each form group
+                if "password" in inp:  # If an input has a password field than we return the whole group, inputs and page url
+                    return group, inputs, login_page_url, True
 
     return "0", 0, "0", False
 

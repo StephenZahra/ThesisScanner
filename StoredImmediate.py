@@ -33,7 +33,7 @@ def locate_input_points(html):
 
 def post_url(html):
     """
-    This function finds all form action links in a page, and returns only the required form action links
+    This function finds all form action links in given html
     """
 
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]

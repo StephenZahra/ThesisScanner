@@ -20,7 +20,7 @@ def get_page_urls(html):
     characters if so
     """
 
-    link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
+    link_collection = re.findall(r"(href[a-zA-Z0-9_=:.\"/'\\\\]*)+", str(html))
 
     required_links = []
     for link in link_collection:
@@ -42,7 +42,7 @@ def check_nested_links(required_links):
         response = urllib.request.urlopen(url)
         html = response.read()
 
-        link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
+        link_collection = re.findall(r"(href[a-zA-Z0-9_=:.\"/'\\\\]*)+", str(html))
 
         for link in link_collection:
             if (link.find("127.0.0.1:8000") != -1):
