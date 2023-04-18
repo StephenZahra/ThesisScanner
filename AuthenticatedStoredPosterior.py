@@ -9,6 +9,8 @@ import asyncio
 from pyppeteer import launch
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 
 
@@ -147,39 +149,46 @@ def check_nested_links(required_links, hostname):
 
     nested_links = []
     for url in required_links:
-        if(str(urlparse(url).hostname) == hostname or str(urlparse(url).hostname) == "None"):
-            try:
-                response = urllib.request.urlopen(hostname+url)
-                html = response.read()
+        #if(str(urlparse(url).hostname) == hostname or str(urlparse(url).hostname) == "None"):
+        try:
+            joined_url = "http://"+hostname+url
+            response = urllib.request.urlopen(joined_url)
+            html = response.read()
 
-                a_tags = re.findall(r'href="([^"]*)"', str(html))
-                vue_urls = re.findall(r'to="([^"]*)"', str(html))
-                all_tags = a_tags + vue_urls
+            a_tags = re.findall(r'href="([^"]*)"', str(html))
+            vue_urls = re.findall(r'to="([^"]*)"', str(html))
+            all_tags = a_tags + vue_urls
 
-                #link_collection = re.findall(r"(href[a-zA-Z0-9_=:.\"/'\\\\]*)+", str(html))
+            #link_collection = re.findall(r"(href[a-zA-Z0-9_=:.\"/'\\\\]*)+", str(html))
 
-                for link in all_tags:
-                    parsed_link = urlparse(link)
-                    if (str(parsed_link.hostname) == hostname):  # This helps us stay in session  (not going to different websites)
-                        #modif_link = link.replace("href=\"", '')
-                        #modif_link = modif_link.replace("\"", '')
-                        nested_links.append(link)
-            except Exception:
-                pass
-    print("ATTTTTTTT:", nested_links)
+            for link in all_tags:
+               # parsed_link = urlparse(link)
+                #if (str(parsed_link.hostname) == hostname):  # This helps us stay in session  (not going to different websites)
+                    #modif_link = link.replace("href=\"", '')
+                    #modif_link = modif_link.replace("\"", '')
+                nested_links.append(link)
+        except Exception:
+            pass
+
     return nested_links
 
 
-def filter_links(all_urls):
+def filter_links(all_urls, hostname):
     """
     This function checks for duplicates in the total collection of links in the website and removes them
     """
 
     output = ""
     all_urls = list(dict.fromkeys(all_urls))
+    temp_storage = []
     for url in all_urls:
-        if(url != "#"):  # check that the url is not a # (this will cause confusion as it routest to nowhere)
-            output += url + "|"
+        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
+            temp_storage.append(url)
+
+
+    for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
+        if(str(urlparse(last_urls).hostname) == hostname or str(urlparse(last_urls).hostname) == "None"):
+            output += last_urls + "|"
 
     return output
 
@@ -237,117 +246,132 @@ def test_authenticated_stored_posterior(urls):
         if (login_response.status_code == 200):  # Login successful
             # We must start a new process of scanning for urls, getting forms, and testing them as authenticated users
             front = login_response.content
+            print(front)
+            input()
             new_urls = get_page_urls(front)
 
             nested_links = check_nested_links(new_urls, str(hostname))  # Check for links inside the new pages
-            filtered_urls = filter_links(new_urls + nested_links)  # Form a collection of urls we've seen so far and new ones (not including urls variable as that has login and register that are not important)
+            filtered_urls = filter_links(new_urls + nested_links, hostname)  # Form a collection of urls we've seen so far and new ones (not including urls variable as that has login and register that are not important)
             split_urls = list(filtered_urls.split("|"))  # split the filtered_urls string
-            print("BBBBBBBB: ", nested_links, filtered_urls, split_urls)
+
             to_scan = []
             for unique_url in split_urls:
                 if (unique_url not in urls):  # If the current URL is not present in the list of URLs we have already seen
-                    to_scan.append(str(hostname) + unique_url)
+                    to_scan.append("http://" + str(hostname) + unique_url)
             to_scan.pop(-1)  # Removing the last element as it is an empty string
-            print("TOSCAN: ", to_scan)
-            # chrome_options = Options()
-            # chrome_options.add_argument('--headless')
-            # chrome_options.add_argument('--disable-gpu')
 
-            rest = authenticated_session.cookies.get_dict()
-            cookie_jar = http.cookiejar.CookieJar()
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--disable-gpu')
 
-            cookie = http.cookiejar.Cookie(0, None, None, None, False, str(hostname), True, "/", True, False, None, False, None, None, rest=rest, comment_url=None)
-            cookie_jar.set_cookie(cookie)
+            # rest = authenticated_session.cookies.get_dict()
+            # cookie_jar = http.cookiejar.CookieJar()
+            #
+            # cookie = http.cookiejar.Cookie(0, None, None, None, False, str(hostname), True, "/", True, False, None, False, None, None, rest=rest, comment_url=None)
+            # cookie_jar.set_cookie(cookie)
+
+
+            browser = webdriver.Chrome(options=chrome_options)
+            browser.get(login_page_url)
+            browser.delete_all_cookies()
+            selenium_cookies = authenticated_session.cookies.get_dict()
+            for name, value in selenium_cookies.items():
+                #print(name, value)
+                browser.add_cookie({'name': name, 'value': value})
+
+            browser.add_cookie({'name': "domain", 'value': "." + str(hostname)})
 
             for next_url in to_scan:
-                #try:
-                # browser = webdriver.Chrome(options=chrome_options)
-                # selenium_cookies = authenticated_session.cookies.get_dict()
-                # for name, value in selenium_cookies.items():
-                #     print(name,value)
-                #     chrome_options.add_argument(f'--cookie={name}={value}')
-                #
-                # browser.add_cookie({'name': "domain", 'value': "localhost"})
-                # print(browser.get_cookies())
-                # input()
-                # browser.get(next_url)
-                # html = browser.page_source
-                # print(html)
-                # browser.quit()
+                browser.get(next_url)
+                html = browser.page_source
 
-                #page_html = authenticated_session.get(next_url)
-                #print("PAGE URL: ", page_html.url)
-                #print("PAGE HEADERS: ", page_html.headers)
+                if("vue" in html):  # Web app is using Vue
+                    form_groups = re.findall(r"(<form[a-zA-Z0-9 =\"/\-><\\]+)+<\/form>", html)  # Collection of <form>###</form>
 
-                opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
-                response = opener.open(next_url)
-                time.sleep(2)
-                html = response.read()
-                input()
-                #print(html)
-                input()
-                if("dashboard" in next_url):
-                    print(html)
-                    input()
+                    for form in form_groups:
+                        form_input_vals = []
+                        all_inputs = re.findall(r"(<input[a-zA-Z0-9 =\"/\-<\\]+)+>", form)
 
-                auth_groups, input_no = get_forms(html)
+                        #all_inputs = browser.find_elements(By.TAG_NAME, 'input')
 
-                if(input_no > 0):  # We cannot do anything if there are no inputs to inject in
-                    for auth_group in auth_groups:
-                        # Gets the current form token
-                        token = get_token(auth_group)
-                        print("got token: ", token)
+                        for input in all_inputs:
+                            type = get_input_types(input)[0]
+                            #input_elem = WebElement(None, 'input')
 
-                        # Get the inputs for each form group iteratively
-                        inputs = auth_groups[auth_group]
-                        print("got inputs: ", inputs)
+                            if(type == "search"):
+                                search_inject = "ssti test {{7*7}} " + next_url
+                                browser.execute_script(f"document.querySelector({input}).value= '{search_inject}'")
+                            elif (type == "text"):
+                                text_inject = "ssti test {{7*7}} " + next_url
+                                browser.execute_script(f"document.querySelector({input}).value= '{text_inject}'")
+                            elif (type == "number"):
+                                browser.execute_script(f"document.querySelector({input}).value= 1234")
+                            elif (type == "email"):
+                                browser.execute_script(f"document.querySelector({input}).value= 'test@gmail.com'")
+                            elif (type == "checkbox"):
+                                browser.execute_script(f"document.querySelector({input}).value= '1'")
 
-                        types = get_input_types(auth_group)
-                        print("got types: ", types)
-                        post_data = {}
-                        input_counter = 0
-                        if(input_no == len(inputs)):  # Check that the count of inputs found earlier is the same the count of "name=" values found
-                            for inp in inputs:  # Cycle through inputs and fill in based on type
-                                if(types[input_counter] == "text"):
-                                    post_data[inp] = "ssti test {{7*7}} " + next_url + " " + auth_group
-                                elif(types[input_counter] == "number"):
-                                    post_data[inp] = 1234567890
-                                elif(types[input_counter] == "email"):
-                                    post_data[inp] = "test@gmail.com"
-                                elif(types[input_counter] == "checkbox"):
-                                    post_data[inp] = "1"
+                        found_form = browser.execute_script(f"document.querySelector({form})")
+                        browser.execute_script("arguments[0].submit()", found_form)  # CONTINUE FROM HERE, CHECK REGARDING DROPDOWN AND TEST CODE
 
-                                input_counter+=1
-
-                            post_data["_token"] = token
-                            requests.post(auth_group, post_data, cookies)
-                        else:
-                            print("\nCannot test form ", auth_group, " on page: ", next_url, " due to one or more missing name= attribute/s")
                 else:
-                    print(f"\nNo form links found for url: {next_url}. Moving on to next url")
-                #except Exception:
-                 #   continue
+                    auth_groups, input_no = get_forms(html)
 
-                #  Check all urls that were scanned again
-                for next_url in to_scan:
-                    html_to_inspect = str(get_html(next_url))
-                    req_line = ""
-                    found_vuln_pairs = []  # Variable to keep track of url pairs found to be vulnerable
+                    if(input_no > 0):  # We cannot do anything if there are no inputs to inject in
+                        for auth_group in auth_groups:
+                            # Gets the current form token
+                            token = get_token(auth_group)
+                            print("got token: ", token)
 
-                    if("ssti test 49" in html_to_inspect):  # Check if the url we are checking have executed ssti
-                        for line in html_to_inspect.split("\n"):  # split new lines from html
-                            if("ssti test 49" in line):
-                                req_line = line  # Save line once found
-                                req_line.replace("ssti test 49 ", "")  # Format the string and split below
-                                line_urls = list(req_line.split(" "))
-                                if(line_urls[0] + " " + line_urls[1] not in found_vuln_pairs):  # Check if we haven't already found this pair of urls previously
-                                    print("SSTI detected on page ", line_urls[0], " from form url: ", line_urls[1])
-                                    found_vuln_pairs.append(line_urls[0] + " " + line_urls[1])
+                            # Get the inputs for each form group iteratively
+                            inputs = auth_groups[auth_group]
+                            print("got inputs: ", inputs)
 
-                                break  # Exit the inner for loop
-            else:
-                print("\n\nFailed to authenticate to perform authenticated scan. The scan will now stop")
-                sys.exit()
+                            types = get_input_types(auth_group)
+                            print("got types: ", types)
+                            post_data = {}
+                            input_counter = 0
+                            if(input_no == len(inputs)):  # Check that the count of inputs found earlier is the same the count of "name=" values found
+                                for inp in inputs:  # Cycle through inputs and fill in based on type
+                                    if(types[input_counter] == "text"):
+                                        post_data[inp] = "ssti test {{7*7}} " + next_url + " " + auth_group
+                                    elif(types[input_counter] == "number"):
+                                        post_data[inp] = 1234567890
+                                    elif(types[input_counter] == "email"):
+                                        post_data[inp] = "test@gmail.com"
+                                    elif(types[input_counter] == "checkbox"):
+                                        post_data[inp] = "1"
+
+                                    input_counter+=1
+
+                                post_data["_token"] = token
+                                requests.post(auth_group, post_data, cookies)
+                            else:
+                                print("\nCannot test form ", auth_group, " on page: ", next_url, " due to one or more missing name= attribute/s")
+                    else:
+                        print(f"\nNo form links found for url: {next_url}. Moving on to next url")
+
+
+                    #  Check all urls that were scanned again
+                    for next_url in to_scan:
+                        html_to_inspect = str(get_html(next_url))
+                        req_line = ""
+                        found_vuln_pairs = []  # Variable to keep track of url pairs found to be vulnerable
+
+                        if("ssti test 49" in html_to_inspect):  # Check if the url we are checking have executed ssti
+                            for line in html_to_inspect.split("\n"):  # split new lines from html
+                                if("ssti test 49" in line):
+                                    req_line = line  # Save line once found
+                                    req_line.replace("ssti test 49 ", "")  # Format the string and split below
+                                    line_urls = list(req_line.split(" "))
+                                    if(line_urls[0] + " " + line_urls[1] not in found_vuln_pairs):  # Check if we haven't already found this pair of urls previously
+                                        print("SSTI detected on page ", line_urls[0], " from form url: ", line_urls[1])
+                                        found_vuln_pairs.append(line_urls[0] + " " + line_urls[1])
+
+                                    break  # Exit the inner for loop
+        else:
+            print("\n\nFailed to authenticate to perform authenticated scan. The scan will now stop")
+            sys.exit()
 
 
 urls = sys.argv[1]
