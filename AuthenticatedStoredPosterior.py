@@ -6,12 +6,17 @@ import urllib.request
 import requests
 from urllib.parse import urlparse
 import asyncio
+
+import selenium.common.exceptions
 from pyppeteer import launch
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 
 def get_html(url):
@@ -76,7 +81,7 @@ def get_input_types(html):
     This function takes form html and returns the types of inputs that are found sequentially
     """
 
-    input_types = re.findall(r"type=\"([a-zA-Z])\"+", html)
+    input_types = re.findall(r"type=\"([a-zA-Z]+)\"", html)
     return input_types
 
 
@@ -246,8 +251,6 @@ def test_authenticated_stored_posterior(urls):
         if (login_response.status_code == 200):  # Login successful
             # We must start a new process of scanning for urls, getting forms, and testing them as authenticated users
             front = login_response.content
-            print(front)
-            input()
             new_urls = get_page_urls(front)
 
             nested_links = check_nested_links(new_urls, str(hostname))  # Check for links inside the new pages
@@ -264,56 +267,170 @@ def test_authenticated_stored_posterior(urls):
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--disable-gpu')
 
-            # rest = authenticated_session.cookies.get_dict()
-            # cookie_jar = http.cookiejar.CookieJar()
-            #
-            # cookie = http.cookiejar.Cookie(0, None, None, None, False, str(hostname), True, "/", True, False, None, False, None, None, rest=rest, comment_url=None)
-            # cookie_jar.set_cookie(cookie)
-
 
             browser = webdriver.Chrome(options=chrome_options)
             browser.get(login_page_url)
             browser.delete_all_cookies()
             selenium_cookies = authenticated_session.cookies.get_dict()
             for name, value in selenium_cookies.items():
-                #print(name, value)
                 browser.add_cookie({'name': name, 'value': value})
 
             browser.add_cookie({'name': "domain", 'value': "." + str(hostname)})
 
             for next_url in to_scan:
                 browser.get(next_url)
+                #wait_for_load = WebDriverWait(browser, 30).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
                 html = browser.page_source
+                #print(html)
 
                 if("vue" in html):  # Web app is using Vue
-                    form_groups = re.findall(r"(<form[a-zA-Z0-9 =\"/\-><\\]+)+<\/form>", html)  # Collection of <form>###</form>
+                    #form_groups = re.findall(r"(<form[a-zA-Z0-9 =\"/\-><\\]+)+<\/form>", html)  # Collection of <form>###</form>
 
-                    for form in form_groups:
-                        form_input_vals = []
-                        all_inputs = re.findall(r"(<input[a-zA-Z0-9 =\"/\-<\\]+)+>", form)
+                    #try:
+                    form_groups = browser.find_elements(By.TAG_NAME, 'form')  # Get all forms
+                    print("WORKING IN: ", next_url, len(form_groups))
 
-                        #all_inputs = browser.find_elements(By.TAG_NAME, 'input')
+                    if(len(form_groups) == 0):
+                        print(f"No forms detected on {next_url}. Moving on to next url")
 
-                        for input in all_inputs:
-                            type = get_input_types(input)[0]
-                            #input_elem = WebElement(None, 'input')
+                    #print("FORM GROUPS: ", len(form_groups))
+                    for index in range(len(form_groups)):
+                        form_groups = browser.find_elements(By.TAG_NAME, 'form')
+                        current_form = form_groups[index]
+                        if("new password" in current_form.text.lower()):
+                            print(current_form.text.lower())  # could fix this by making a check in the if statement above like the len(form_groups)
+                            print("Found password reset form, skipping as Stored SSTI will not execute")
+                            continue
+                        else:
+                            pass
+                            #print(f"No password reset form found in {next_url}")
 
-                            if(type == "search"):
-                                search_inject = "ssti test {{7*7}} " + next_url
-                                browser.execute_script(f"document.querySelector({input}).value= '{search_inject}'")
-                            elif (type == "text"):
-                                text_inject = "ssti test {{7*7}} " + next_url
-                                browser.execute_script(f"document.querySelector({input}).value= '{text_inject}'")
-                            elif (type == "number"):
-                                browser.execute_script(f"document.querySelector({input}).value= 1234")
-                            elif (type == "email"):
-                                browser.execute_script(f"document.querySelector({input}).value= 'test@gmail.com'")
-                            elif (type == "checkbox"):
-                                browser.execute_script(f"document.querySelector({input}).value= '1'")
+                        all_inputs = current_form.find_elements(By.TAG_NAME, 'input')
+                        all_dropdowns = current_form.find_elements(By.TAG_NAME, 'select')
+                        for dd_index in range(len(all_dropdowns)):  # Checking for any empty dropdowns, remove if so
+                            if(all_dropdowns[dd_index].text == ""):
+                                all_dropdowns.remove(all_dropdowns[dd_index])
 
-                        found_form = browser.execute_script(f"document.querySelector({form})")
-                        browser.execute_script("arguments[0].submit()", found_form)  # CONTINUE FROM HERE, CHECK REGARDING DROPDOWN AND TEST CODE
 
+                        new_btns = browser.find_elements(By.TAG_NAME, 'button')
+                        #new_links = browser.find_elements(By.TAG_NAME, 'a')
+                        #print("CURRENT FORM TEXT: ", current_form.get_attribute("innerHTML"))
+
+                        visibility_status = True
+                        if ("category" in next_url):
+                            print("CHECK CURRENT FORM VISIBLE PRE CHECKING ELSE: ", current_form.is_displayed())
+                            for test in all_inputs:
+                                print("next input test visible: ", test.is_displayed())
+                        # Check if any of the form elements are not visible
+                        if any(not input_tag.is_displayed() for input_tag in all_inputs or not ddown.is_displayed() for ddown in all_dropdowns):
+                            if ("category" in next_url):
+                                print("category has gone in the cursed any check")
+                            visibility_status = False  # THIS IF SOMEHOW IS THE ROOT CAUSE OF THIS ISSUE!!!!!!!!!
+                                                       # I AM CONVINCED THE .IS_DISPLAYED CANT HANDLE HIDDEN FIELDS OR THERE IS A HIDDEN SELECT
+
+                        if ("category" in next_url):
+                            print("COUNT OF INPUTS: ", len(all_inputs), "COUNT OF SELECTS: ", len(all_dropdowns))
+                            print("vis status under inputs are displayed: ", visibility_status)
+                        if visibility_status == False:
+                            if ("category" in next_url):
+                                print("category went into False visibility state")
+                            for btn_index in range(len(new_btns)):
+                                if(visibility_status == True):
+                                    break
+                                new_btns = browser.find_elements(By.TAG_NAME, 'button')
+                                next_btn = new_btns[btn_index]
+                                next_btn.click()
+                                for inp_indx in range(len(all_inputs)):
+                                    fresh_inps = browser.find_elements(By.TAG_NAME, 'input')
+                                    inp_index = fresh_inps[inp_indx]
+                                    if(inp_index.is_displayed() == True):
+                                        visibility_status = True
+                                        break
+                                    else:
+                                        visibility_status = False
+                            print(next_url, ": ", visibility_status)
+                            # for link_index in range(len(new_links)):
+                            #     if(visibility_status == True):
+                            #         break
+                            #     new_a_tags = browser.find_elements(By.TAG_NAME, 'a')
+                            #     next_a = new_a_tags[link_index]
+                            #     if (next_a.text not in to_scan):  # Remove new urls to not click on previously found urls
+                            #         next_a.click()
+                            #         for inp_indx in range(len(all_inputs)):
+                            #             fresh_inps = browser.find_elements(By.TAG_NAME, 'input')
+                            #             inp_index = fresh_inps[inp_indx]
+                            #             if (inp_index.is_displayed() == True):
+                            #                 visibility_status = True
+                            #                 break
+                            #             else:
+                            #                 visibility_status = False
+                        # if("category" in next_url):
+                        #     print("CHECK BEFORE ENTERING CODE: ", visibility_status)
+                        if(visibility_status == True):
+                            current_form = form_groups[index]  # Getting the current form again as a safety measure for visibility bypassing
+                            fresh_inps = browser.find_elements(By.TAG_NAME, 'input')
+                            for indx in range(len(fresh_inps)):  # Loop through inputs after steps taken to display while refreshing lists
+                                next_inp = fresh_inps[indx]
+                                if("category" in next_url):
+                                    print("CATEGORY FORM VISIBILITY 1: ", current_form.is_displayed())
+                                try:
+                                    if(next_inp.get_attribute('type') == "search"):
+                                        search_inject = "ssti test {{7*7}} " + next_url
+                                        next_inp.clear()
+                                        next_inp.send_keys(search_inject)
+                                    elif (next_inp.get_attribute('type') == "text"):
+                                        text_inject = "ssti test {{7*7}} " + next_url
+                                        next_inp.clear()
+                                        next_inp.send_keys(text_inject)
+                                    elif (next_inp.get_attribute('type') == "number"):
+                                        next_inp.clear()
+                                        next_inp.send_keys("1234")
+                                    elif (next_inp.get_attribute('type') == "email"):
+                                        next_inp.clear()
+                                        next_inp.send_keys("test@gmail.com")
+                                    elif (next_inp.get_attribute('type') == "checkbox"):
+                                        next_inp.clear()
+                                        next_inp.send_keys("0")
+                                    elif(next_inp.get_attribute('type') == ""):  # If the type isn't specified we assume that it is text
+                                        text_inject = "ssti test {{7*7}} " + next_url
+                                        next_inp.clear()
+                                        next_inp.send_keys(text_inject)
+                                except selenium.common.exceptions.ElementNotInteractableException:
+                                    pass
+
+                            #fresh_drops = browser.find_elements(By.TAG_NAME, 'select')
+                            for dropdown_index in range(len(all_dropdowns)):  # Iterate through dropdown elements
+                                if ("category" in next_url):
+                                    print("select here in category")
+                                select_elem = Select(all_dropdowns[dropdown_index].click())
+                                select_elem.select_by_index(0)
+                                #first_elem_val = first_elem.get_attribute("value")
+                                #current_form.send_keys(first_elem_val)
+
+                            if ("category" in next_url):
+                                print("CATEGORY FORM VISIBILITY 2: ", current_form.is_displayed())
+                            form_buttons = current_form.find_elements(By.TAG_NAME, 'button')
+
+
+                            current_form = form_groups[index]  # Getting the current form again as a safety measure for visibility bypassing
+                            if ("category" in next_url):
+                                print("aaagsuigbrgyirbgusgrs")
+                                print(current_form.text)
+                                print("IF THAT DIDNT WORK")
+                                print(current_form.get_attribute("innerHTML"))
+                            for button_indx in range(len(form_buttons)):
+                                form_buttons = current_form.find_elements(By.TAG_NAME, 'button')
+                                # if ("category" in next_url):
+                                #     print("FORM VISIBLE: ", current_form.is_displayed(), "TEXT IN FORM: ", current_form.text, "innnerhtml: ", current_form.get_attribute("innerHTML"))
+                                next_btn = form_buttons[button_indx]
+                                # if ("category" in next_url):
+                                #     print("TEST BTN DISPLAY: ", next_btn.get_attribute("innerHTML")," is displayed: ", str(next_btn.is_displayed()))
+                                if(next_btn.get_attribute('type') == 'submit' and next_btn.is_displayed() == True):  # Found the submit button
+                                    if ("category" in next_url):
+                                        print("INNERHTML: ", next_btn.get_attribute('innerHTML'))
+                                    next_btn.click()
+                        else:
+                            print(f"Skipping form on {next_url} as it was not revealed")
                 else:
                     auth_groups, input_no = get_forms(html)
 
