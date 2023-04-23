@@ -203,7 +203,6 @@ def test_authenticated_stored_posterior(urls):
     login_page_url = ""
     login_form_url = ""
     login_inputs = {}
-    netloc = ""
 
     #  Loop through all URLs to find login form
     try:
@@ -279,116 +278,61 @@ def test_authenticated_stored_posterior(urls):
 
             for next_url in to_scan:
                 browser.get(next_url)
-                #wait_for_load = WebDriverWait(browser, 30).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
                 html = browser.page_source
-                #print(html)
 
                 if("vue" in html):  # Web app is using Vue
-                    #form_groups = re.findall(r"(<form[a-zA-Z0-9 =\"/\-><\\]+)+<\/form>", html)  # Collection of <form>###</form>
-
-                    #try:
                     form_groups = browser.find_elements(By.TAG_NAME, 'form')  # Get all forms
-                    print("WORKING IN: ", next_url, len(form_groups))
 
                     if(len(form_groups) == 0):
                         print(f"No forms detected on {next_url}. Moving on to next url")
 
-                    #print("FORM GROUPS: ", len(form_groups))
                     for index in range(len(form_groups)):
                         form_groups = browser.find_elements(By.TAG_NAME, 'form')
                         current_form = form_groups[index]
-                        if("new password" in current_form.text.lower()):
-                            print(current_form.text.lower())  # could fix this by making a check in the if statement above like the len(form_groups)
+
+                        if("new password" in current_form.get_attribute("innerHTML").lower()):
                             print("Found password reset form, skipping as Stored SSTI will not execute")
                             continue
                         else:
                             pass
-                            #print(f"No password reset form found in {next_url}")
 
                         all_inputs = current_form.find_elements(By.TAG_NAME, 'input')
                         all_dropdowns = current_form.find_elements(By.TAG_NAME, 'select')
+
+                        if(len(all_inputs) == 1):  # Check if the input is just a hidden laravel token
+                            if(all_inputs[0].get_attribute('type') == "hidden"):
+                                continue
+
                         for dd_index in range(len(all_dropdowns)):  # Checking for any empty dropdowns, remove if so
                             if(all_dropdowns[dd_index].text == ""):
                                 all_dropdowns.remove(all_dropdowns[dd_index])
 
-
-                        new_btns = browser.find_elements(By.TAG_NAME, 'button')
-                        #new_links = browser.find_elements(By.TAG_NAME, 'a')
-                        #print("CURRENT FORM TEXT: ", current_form.get_attribute("innerHTML"))
-
                         visibility_status = True
-                        if ("category" in next_url):
-                            print("CHECK CURRENT FORM VISIBLE PRE CHECKING ELSE: ", current_form.is_displayed())
-                            for test in all_inputs:
-                                print("next input test visible: ", test.is_displayed())
                         # Check if any of the form elements are not visible
-                        if any(not input_tag.is_displayed() for input_tag in all_inputs or not ddown.is_displayed() for ddown in all_dropdowns):
-                            if ("category" in next_url):
-                                print("category has gone in the cursed any check")
-                            visibility_status = False  # THIS IF SOMEHOW IS THE ROOT CAUSE OF THIS ISSUE!!!!!!!!!
-                                                       # I AM CONVINCED THE .IS_DISPLAYED CANT HANDLE HIDDEN FIELDS OR THERE IS A HIDDEN SELECT
+                        if any(not input_tag.is_displayed() for input_tag in all_inputs):
+                            visibility_status = False
 
-                        if ("category" in next_url):
-                            print("COUNT OF INPUTS: ", len(all_inputs), "COUNT OF SELECTS: ", len(all_dropdowns))
-                            print("vis status under inputs are displayed: ", visibility_status)
-                        if visibility_status == False:
-                            if ("category" in next_url):
-                                print("category went into False visibility state")
-                            for btn_index in range(len(new_btns)):
-                                if(visibility_status == True):
-                                    break
-                                new_btns = browser.find_elements(By.TAG_NAME, 'button')
-                                next_btn = new_btns[btn_index]
-                                next_btn.click()
-                                for inp_indx in range(len(all_inputs)):
-                                    fresh_inps = browser.find_elements(By.TAG_NAME, 'input')
-                                    inp_index = fresh_inps[inp_indx]
-                                    if(inp_index.is_displayed() == True):
-                                        visibility_status = True
-                                        break
-                                    else:
-                                        visibility_status = False
-                            print(next_url, ": ", visibility_status)
-                            # for link_index in range(len(new_links)):
-                            #     if(visibility_status == True):
-                            #         break
-                            #     new_a_tags = browser.find_elements(By.TAG_NAME, 'a')
-                            #     next_a = new_a_tags[link_index]
-                            #     if (next_a.text not in to_scan):  # Remove new urls to not click on previously found urls
-                            #         next_a.click()
-                            #         for inp_indx in range(len(all_inputs)):
-                            #             fresh_inps = browser.find_elements(By.TAG_NAME, 'input')
-                            #             inp_index = fresh_inps[inp_indx]
-                            #             if (inp_index.is_displayed() == True):
-                            #                 visibility_status = True
-                            #                 break
-                            #             else:
-                            #                 visibility_status = False
-                        # if("category" in next_url):
-                        #     print("CHECK BEFORE ENTERING CODE: ", visibility_status)
                         if(visibility_status == True):
-                            current_form = form_groups[index]  # Getting the current form again as a safety measure for visibility bypassing
-                            fresh_inps = browser.find_elements(By.TAG_NAME, 'input')
-                            for indx in range(len(fresh_inps)):  # Loop through inputs after steps taken to display while refreshing lists
+                            fresh_inps = current_form.find_elements(By.TAG_NAME, 'input')
+                            for indx in range(len(fresh_inps)):  # Loop through inputs
                                 next_inp = fresh_inps[indx]
-                                if("category" in next_url):
-                                    print("CATEGORY FORM VISIBILITY 1: ", current_form.is_displayed())
+
                                 try:
                                     if(next_inp.get_attribute('type') == "search"):
                                         search_inject = "ssti test {{7*7}} " + next_url
                                         next_inp.clear()
                                         next_inp.send_keys(search_inject)
-                                    elif (next_inp.get_attribute('type') == "text"):
+                                    elif(next_inp.get_attribute('type') == "text"):
                                         text_inject = "ssti test {{7*7}} " + next_url
                                         next_inp.clear()
                                         next_inp.send_keys(text_inject)
-                                    elif (next_inp.get_attribute('type') == "number"):
+                                    elif(next_inp.get_attribute('type') == "number"):
                                         next_inp.clear()
                                         next_inp.send_keys("1234")
-                                    elif (next_inp.get_attribute('type') == "email"):
+                                    elif(next_inp.get_attribute('type') == "email"):
                                         next_inp.clear()
                                         next_inp.send_keys("test@gmail.com")
-                                    elif (next_inp.get_attribute('type') == "checkbox"):
+                                    elif(next_inp.get_attribute('type') == "checkbox"):
                                         next_inp.clear()
                                         next_inp.send_keys("0")
                                     elif(next_inp.get_attribute('type') == ""):  # If the type isn't specified we assume that it is text
@@ -398,36 +342,13 @@ def test_authenticated_stored_posterior(urls):
                                 except selenium.common.exceptions.ElementNotInteractableException:
                                     pass
 
-                            #fresh_drops = browser.find_elements(By.TAG_NAME, 'select')
-                            for dropdown_index in range(len(all_dropdowns)):  # Iterate through dropdown elements
-                                if ("category" in next_url):
-                                    print("select here in category")
-                                select_elem = Select(all_dropdowns[dropdown_index].click())
-                                select_elem.select_by_index(0)
-                                #first_elem_val = first_elem.get_attribute("value")
-                                #current_form.send_keys(first_elem_val)
-
-                            if ("category" in next_url):
-                                print("CATEGORY FORM VISIBILITY 2: ", current_form.is_displayed())
                             form_buttons = current_form.find_elements(By.TAG_NAME, 'button')
 
-
-                            current_form = form_groups[index]  # Getting the current form again as a safety measure for visibility bypassing
-                            if ("category" in next_url):
-                                print("aaagsuigbrgyirbgusgrs")
-                                print(current_form.text)
-                                print("IF THAT DIDNT WORK")
-                                print(current_form.get_attribute("innerHTML"))
                             for button_indx in range(len(form_buttons)):
                                 form_buttons = current_form.find_elements(By.TAG_NAME, 'button')
-                                # if ("category" in next_url):
-                                #     print("FORM VISIBLE: ", current_form.is_displayed(), "TEXT IN FORM: ", current_form.text, "innnerhtml: ", current_form.get_attribute("innerHTML"))
                                 next_btn = form_buttons[button_indx]
-                                # if ("category" in next_url):
-                                #     print("TEST BTN DISPLAY: ", next_btn.get_attribute("innerHTML")," is displayed: ", str(next_btn.is_displayed()))
+
                                 if(next_btn.get_attribute('type') == 'submit' and next_btn.is_displayed() == True):  # Found the submit button
-                                    if ("category" in next_url):
-                                        print("INNERHTML: ", next_btn.get_attribute('innerHTML'))
                                     next_btn.click()
                         else:
                             print(f"Skipping form on {next_url} as it was not revealed")
@@ -453,11 +374,11 @@ def test_authenticated_stored_posterior(urls):
                                     if(types[input_counter] == "text"):
                                         post_data[inp] = "ssti test {{7*7}} " + next_url + " " + auth_group
                                     elif(types[input_counter] == "number"):
-                                        post_data[inp] = 1234567890
+                                        post_data[inp] = 1234
                                     elif(types[input_counter] == "email"):
                                         post_data[inp] = "test@gmail.com"
                                     elif(types[input_counter] == "checkbox"):
-                                        post_data[inp] = "1"
+                                        post_data[inp] = "0"
 
                                     input_counter+=1
 
@@ -486,6 +407,13 @@ def test_authenticated_stored_posterior(urls):
                                         found_vuln_pairs.append(line_urls[0] + " " + line_urls[1])
 
                                     break  # Exit the inner for loop
+            for next_url in to_scan:  # Re-check the urls to see where SSTI has been found
+                browser.get(next_url)
+                html = browser.page_source
+
+                found_ssti = re.search(r"ssti test 49 ([a-zA-Z0-9:/\-.]+)", html)
+                if(found_ssti):
+                    print(f"\nOn {next_url} - Found executed SSTI from {found_ssti.group(0)}")
         else:
             print("\n\nFailed to authenticate to perform authenticated scan. The scan will now stop")
             sys.exit()
