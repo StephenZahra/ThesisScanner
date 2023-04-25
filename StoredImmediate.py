@@ -5,13 +5,14 @@ import requests
 
 def locate_input_points(html):
     """
-    Finds all text input tags and returns their names
+    This function finds all text input tags and returns their names
     """
 
     # find all input tags including token
     input_collection = re.findall(r"(<input [a-zA-Z0-9 _=\"\-'\\\\]*>)+", str(html))
     textarea_collection = re.findall(r"(<textarea [a-zA-Z0-9 _:;=\"\-'\\\\]*>)+", str(html))
-    total_inputs = input_collection + textarea_collection
+    dropdown_collection = re.findall(r"(<select [a-zA-Z0-9 _:;=\"\-'\\\\]*>)+", str(html))
+    total_inputs = input_collection+textarea_collection+dropdown_collection
 
     all_names = []  # array containing necessary input tags which will be used later
     for elem in total_inputs:  # loop through inputs, remove token & submit input
@@ -24,12 +25,15 @@ def locate_input_points(html):
         all_names += re.findall(r"(name=[\\\\'a-zA-Z0-9\"'\\\\']+)", inp)
 
     final_names = []
+    input_counter = 0
     for elem in all_names:  # Clean names
-        temp_name = elem.replace("name=", "")
-        temp_name = temp_name.replace("'", "")
-        final_names.append(temp_name)
+        if("name=" in elem):  # Check that name= attribute exists, it is required to test
+            temp_name = elem.replace("name=", "")
+            temp_name = temp_name.replace("'", "")
+            final_names.append(temp_name)
+        input_counter+=1
 
-    return final_names
+    return final_names, input_counter
 
 def post_url(html):
     """
@@ -60,16 +64,15 @@ def get_forms(html):
     and pair them together.
     """
 
-    form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s'\\\\]+</form>)+", html)
-
+    form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s\S'\\\\]+<\/form>)+", html)
     link_groups = {}
+    input_count = 0
     for group in form_groups:
         action_link = post_url(group)
-        input_links = locate_input_points(group)
+        input_links, input_count = locate_input_points(group)
         link_groups[action_link] = input_links
 
-    return link_groups
-
+    return link_groups, input_count
 
 
 def test_stored_immediate(urls):
@@ -88,7 +91,7 @@ def test_stored_immediate(urls):
             cookies = session.cookies
 
             post_data = {}
-            groups = get_forms(front.text)
+            groups, input_no = get_forms(front.text)
 
             for group in groups:
                 # Get the inputs for each form group iteratively

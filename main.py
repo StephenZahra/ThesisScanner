@@ -19,43 +19,43 @@ while(True):
         print("\nInvalid input, please try again\n\n")
 
 
-cred_names = []
-cred_vals = []
-if(cred_choice == "1"):  # User decides to enter credentials
-    counter = 1
-    finished = False
-    while(finished == False):  # Loop until user has entered all credentials
-        print(f"\nCredential set {counter}\n==================")
-
-        cred_name = ""
-        while(True):  # Loop until valid input
-            cred_name = input("Credential Name: ")
-            if(len(cred_name) == 0):
-                print("\nInvalid input, please try again\n\n")
-            else:
-                break
-
-        cred_val = ""
-        while(True):  # Loop until valid input
-            cred_val = input("Credential Value: ")
-            if(len(cred_val) == 0):
-                print("\nInvalid input, please try again\n\n")
-            else:
-                break
-
-        cred_names.append(cred_name)
-        cred_vals.append(cred_val)
-        counter+=1
-
-        while(True):  # Check if user is finished from credential input
-            stop_input = input("Have all credentials been inputted (y/n): ")
-            if(stop_input == "y"):
-                finished = True
-                break
-            elif(stop_input == "n"):
-                break
-            else:
-                print("\nInvalid input, please try again\n\n")
+# cred_names = []
+# cred_vals = []
+# if(cred_choice == "1"):  # User decides to enter credentials
+#     counter = 1
+#     finished = False
+#     while(finished == False):  # Loop until user has entered all credentials
+#         print(f"\nCredential set {counter}\n==================")
+#
+#         cred_name = ""
+#         while(True):  # Loop until valid input
+#             cred_name = input("Credential Name: ")
+#             if(len(cred_name) == 0):
+#                 print("\nInvalid input, please try again\n\n")
+#             else:
+#                 break
+#
+#         cred_val = ""
+#         while(True):  # Loop until valid input
+#             cred_val = input("Credential Value: ")
+#             if(len(cred_val) == 0):
+#                 print("\nInvalid input, please try again\n\n")
+#             else:
+#                 break
+#
+#         cred_names.append(cred_name)
+#         cred_vals.append(cred_val)
+#         counter+=1
+#
+#         while(True):  # Check if user is finished from credential input
+#             stop_input = input("Have all credentials been inputted (y/n): ")
+#             if(stop_input == "y"):
+#                 finished = True
+#                 break
+#             elif(stop_input == "n"):
+#                 break
+#             else:
+#                 print("\nInvalid input, please try again\n\n")
 
 
 print("\n\nScanning for URLs")
@@ -77,10 +77,14 @@ url_array.pop(-1)   # removing the final element as it is not a URL
 #
 # print("\n\nTesting Stored SSTI with Immediate Injection and Rendering")
 # subprocess.run(['python', 'StoredImmediate.py', ' '.join(url_array)])
-
+temp_names = ["email", "password"]
+temp_crds = ["admin@gmail.com", "password"]
 if(cred_choice == "1"):
-    print("\n\nTesting Blind SSTI with Posterior Injection and Rendering")
-    subprocess.run(['python', 'BlindPosterior.py', ' '.join(url_array), ' '.join(cred_names), ' '.join(cred_vals)])
+    # print("\n\nTesting Blind SSTI with Posterior Injection and Rendering")
+    # subprocess.run(['python', 'BlindPosterior.py', ' '.join(url_array), ' '.join(cred_names), ' '.join(cred_vals)])
 
     # print("\n\nTesting Blind SSTI with Immediate Injection and Rendering")
     # subprocess.run(['python', 'BlindImmediate.py', ' '.join(url_array)])
+
+    print("\n\nTesting Authenticated Stored Posterior Injection and Rendering")
+    subprocess.run(['python', 'AuthenticatedStoredPosterior.py', ' '.join(url_array), ' '.join(temp_names), ' '. join(temp_crds)])#join(cred_names), ' '.join(cred_vals)])

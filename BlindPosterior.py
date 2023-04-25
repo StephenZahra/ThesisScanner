@@ -1,8 +1,11 @@
 import re
 import sys
+from urllib.parse import urlparse
+
 import requests
 import subprocess
 import urllib.request
+
 
 
 def get_page_urls(html):
@@ -11,16 +14,15 @@ def get_page_urls(html):
     characters if so
     """
 
-    link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
+    a_tags = re.findall(r'href="([^"]*)"', str(html))
+    vue_urls = re.findall(r'to="([^"]*)"', str(html))
+    all_tags = a_tags + vue_urls
 
     required_links = []
-    for link in link_collection:
-        if (link.find("127.0.0.1:8000") != -1):
-            modif_link = link.replace("href=\"", '')
-            modif_link = modif_link.replace("\"", '')
-            required_links.append(modif_link)
-
+    for link in all_tags:
+        required_links.append(link)
     return required_links
+
 
 
 def locate_input_points(html):
@@ -31,7 +33,8 @@ def locate_input_points(html):
     # find all input tags including token
     input_collection = re.findall(r"(<input [a-zA-Z0-9 _=\"\-'\\\\]*>)+", str(html))
     textarea_collection = re.findall(r"(<textarea [a-zA-Z0-9 _:;=\"\-'\\\\]*>)+", str(html))
-    total_inputs = input_collection+textarea_collection
+    dropdown_collection = re.findall(r"(<select [a-zA-Z0-9 _:;=\"\-'\\\\]*>)+", str(html))
+    total_inputs = input_collection+textarea_collection+dropdown_collection
 
     all_names = []  # array containing necessary input tags which will be used later
     for elem in total_inputs:  # loop through inputs, remove token & submit input
@@ -44,21 +47,34 @@ def locate_input_points(html):
         all_names += re.findall(r"(name=[\\\\'a-zA-Z0-9\"'\\\\']+)", inp)
 
     final_names = []
+    input_counter = 0
     for elem in all_names:  # Clean names
-        temp_name = elem.replace("name=", "")
-        temp_name = temp_name.replace("'", "")
-        final_names.append(temp_name)
+        if("name=" in elem):  # Check that name= attribute exists, it is required to test
+            temp_name = elem.replace("name=", "")
+            temp_name = temp_name.replace("'", "")
+            final_names.append(temp_name)
+        input_counter+=1
 
-    return final_names
+    return final_names, input_counter
 
 
-def filter_links(all_urls):
+def filter_links(all_urls, hostname):
     """
     This function checks for duplicates in the total collection of links in the website and removes them
     """
 
+    output = ""
     all_urls = list(dict.fromkeys(all_urls))
-    return all_urls
+    temp_storage = []
+    for url in all_urls:
+        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
+            temp_storage.append(url)
+
+    for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
+        if(str(urlparse(last_urls).hostname) == hostname or str(urlparse(last_urls).hostname) == "None"):
+            output += last_urls + "|"
+
+    return output
 
 
 def post_url(html):
@@ -90,15 +106,15 @@ def get_forms(html):
     and pair them together.
     """
 
-    form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s'\\\\]+</form>)+", html)
-
+    form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s\S'\\\\]+<\/form>)+", html)
     link_groups = {}
+    input_count = 0
     for group in form_groups:
         action_link = post_url(group)
-        input_links = locate_input_points(group)
+        input_links, input_count = locate_input_points(group)
         link_groups[action_link] = input_links
 
-    return link_groups
+    return link_groups, input_count
 
 
 def check_login_form(form_groups, login_page_url):
@@ -107,7 +123,7 @@ def check_login_form(form_groups, login_page_url):
     for group in form_groups:  # Check each form group
         inputs = form_groups[group]
 
-        if(len(inputs) == 2):  # Checking that the count of form inputs is 2 indicating a login form as they generally require 2 inputs
+        if(len(inputs) == 2 or len(inputs) == 3):  # Checking that the count of form inputs is 2 or 3 indicating a login form as they generally require 2 or 3 inputs
             for inp in inputs:  # Check each input of each form group
                 if "password" in inp:  # If an input has a password field than we return the whole group, inputs and page url
                     return group, inputs, login_page_url, True
@@ -115,35 +131,46 @@ def check_login_form(form_groups, login_page_url):
     return "0", 0, "0", False
 
 
-def check_nested_links(required_links):
+def check_nested_links(required_links, hostname):
     """
     Iterates through collected links and checks for new ones in them
     """
 
     nested_links = []
     for url in required_links:
-        response = urllib.request.urlopen(url)
-        html = response.read()
+        try:
+            joined_url = "http://"+hostname+url
+            response = urllib.request.urlopen(joined_url)
+            html = response.read()
 
-        link_collection = re.findall(r"(href[a-zA-Z0-9 _=:.\"/'\\\\]*)+", str(html))
+            a_tags = re.findall(r'href="([^"]*)"', str(html))
+            vue_urls = re.findall(r'to="([^"]*)"', str(html))
+            all_tags = a_tags + vue_urls
 
-        for link in link_collection:
-            if (link.find("127.0.0.1:8000") != -1):
-                modif_link = link.replace("href=\"", '')
-                modif_link = modif_link.replace("\"", '')
-                nested_links.append(modif_link)
+            for link in all_tags:
+                nested_links.append(link)
+        except Exception:
+            pass
+
     return nested_links
 
 
-def filter_links(all_urls):
+def filter_links(all_urls, hostname):
     """
     This function checks for duplicates in the total collection of links in the website and removes them
     """
 
     output = ""
     all_urls = list(dict.fromkeys(all_urls))
+    temp_storage = []
     for url in all_urls:
-        output += url + "|"
+        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
+            temp_storage.append(url)
+
+    for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
+        if(str(urlparse(last_urls).hostname) == hostname or str(urlparse(last_urls).hostname) == "None"):
+            output += last_urls + "|"
+
     return output
 
 
@@ -168,7 +195,7 @@ def test_blind_posterior(urls):
             cookies = session.cookies
 
             post_data = {}
-            groups = get_forms(front.text)
+            groups, input_no = get_forms(front.text)
 
             # Check if we have already been to the login page to avoid overriding the values, also avoid the registration page
             if("register" not in front.text):
