@@ -27,6 +27,7 @@ def get_page_urls(html):
     required_links = []
     for link in all_tags:
         required_links.append(link)
+
     return required_links
 
 
@@ -38,8 +39,11 @@ def check_nested_links(required_links, hostname):
 
     nested_links = []
     for url in required_links:
+        joined_url = url
         try:
-            joined_url = "http://"+hostname+url
+            if(hostname not in joined_url):  # check if the url is not formatted properly
+                joined_url = "http://"+hostname+url
+
             response = urllib.request.urlopen(joined_url)
             html = response.read()
 

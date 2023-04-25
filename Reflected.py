@@ -1,6 +1,7 @@
 import re
 import sys
 import requests
+import urllib3.exceptions
 
 
 def locate_input_points(html):
@@ -95,17 +96,23 @@ def test_reflected(urls):
                 # Get the inputs for each form group iteratively
                 inputs = groups[group]
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = "ssti test {{7*7}}"
+                    post_data[inp] = "reflected ssti test {{7*7}}"
 
                 post_data["_token"] = token  # Add token last
-                req = requests.post(group, data=post_data, cookies=cookies)
+                req = None
+
+                try:
+                    req = requests.post(group, data=post_data, cookies=cookies)
+                except (urllib3.exceptions.MaxRetryError, requests.exceptions.ConnectionError):
+                    print("Unable to perform test on " + url + " on form link " + group + " as it is an authentication page")
+                    continue
 
                 # Check that an error is not thrown due to GET route, skip rest of code execution
                 if ("methodNotAllowed" in req.text):
                     scan_result.append("URL: " + url + " isVulnerable: Unable to test, only GET is supported")
                     continue
 
-                if "ssti test 49" in req.text:
+                if "reflected ssti test 49" in req.text:
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: True")
                 else:
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")

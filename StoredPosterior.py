@@ -2,6 +2,7 @@ import re
 import sys
 import urllib.request
 from urllib.parse import urlparse
+import urllib3.exceptions
 import requests
 import random
 import string
@@ -28,8 +29,11 @@ def check_nested_links(required_links, hostname):
 
     nested_links = []
     for url in required_links:
+        joined_url = url
         try:
-            joined_url = "http://"+hostname+url
+            if (hostname not in joined_url):  # check if the url is not formatted properly
+                joined_url = "http://" + hostname + url
+
             response = urllib.request.urlopen(joined_url)
             html = response.read()
 
@@ -161,11 +165,20 @@ def test_stored_posterior(urls):
                 # Get the inputs for each form group iteratively
                 inputs = groups[group]
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = url + " " + group + "ssti test {{7*7}} " + random_string
+                    post_data[inp] = url + " " + group + " stored ssti test {{7*7}} " + random_string
 
                 post_data["_token"] = token  # Add token last
+
+                req = None
+                try:
+                    req = requests.post(group, data=post_data, cookies=cookies)
+                except (urllib3.exceptions.MaxRetryError, requests.exceptions.ConnectionError):
+                    print(
+                        "Unable to perform test on " + url + " on form link " + group + " as it is an authentication page")
+                    continue
+
                 requests.post(group, data=post_data, cookies=cookies)
-        except:
+        except Exception:
             continue
 
 

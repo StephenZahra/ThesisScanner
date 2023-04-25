@@ -141,8 +141,11 @@ def check_nested_links(required_links, hostname):
 
     nested_links = []
     for url in required_links:
+        joined_url = url
         try:
-            joined_url = "http://"+hostname+url
+            if (hostname not in joined_url):  # check if the url is not formatted properly
+                joined_url = "http://" + hostname + url
+
             response = urllib.request.urlopen(joined_url)
             html = response.read()
 
@@ -218,11 +221,15 @@ def test_authenticated_stored_posterior(urls):
 
         authenticated_session = requests.session()  # Create a session to be authenticated
 
-        login_page = authenticated_session.get(login_page_url)  # Get the login page html
+        login_page = authenticated_session.get(login_page_url).text  # Get the login page html
         cookies = authenticated_session.cookies
 
-        login_token = get_token(login_page.text)  # Extract the form token
+        login_token = get_token(login_page)  # Extract the form token
         login_data["_token"] = login_token
+
+        site_type = None
+        if("vue" in login_page):
+            site_type = "vue"
 
         hostname = urlparse(login_form_url).hostname  # Hostname to use later
         login_response = authenticated_session.post(login_form_url, login_data, cookies=cookies)  # Performing login
@@ -258,11 +265,12 @@ def test_authenticated_stored_posterior(urls):
 
             browser.add_cookie({'name': "domain", 'value': "." + str(hostname)})
 
-            for next_url in to_scan:
-                browser.get(next_url)
-                html = browser.page_source
+            if(site_type == "vue"):
+                print("TOSCAN: ", to_scan)
+                for next_url in to_scan:
+                    browser.get(next_url)
+                    html = browser.page_source
 
-                if("vue" in html):  # Web app is using Vue
                     form_groups = browser.find_elements(By.TAG_NAME, 'form')  # Get all forms
 
                     if(len(form_groups) == 0):
@@ -301,11 +309,11 @@ def test_authenticated_stored_posterior(urls):
 
                                 try:
                                     if(next_inp.get_attribute('type') == "search"):
-                                        search_inject = "ssti test {{7*7}} " + next_url
+                                        search_inject = "auth stored ssti test {{7*7}} " + next_url
                                         next_inp.clear()
                                         next_inp.send_keys(search_inject)
                                     elif(next_inp.get_attribute('type') == "text"):
-                                        text_inject = "ssti test {{7*7}} " + next_url
+                                        text_inject = "auth stored ssti test {{7*7}} " + next_url
                                         next_inp.clear()
                                         next_inp.send_keys(text_inject)
                                     elif(next_inp.get_attribute('type') == "number"):
@@ -318,7 +326,7 @@ def test_authenticated_stored_posterior(urls):
                                         next_inp.clear()
                                         next_inp.send_keys("0")
                                     elif(next_inp.get_attribute('type') == ""):  # If the type isn't specified we assume that it is text
-                                        text_inject = "ssti test {{7*7}} " + next_url
+                                        text_inject = "auth stored ssti test {{7*7}} " + next_url
                                         next_inp.clear()
                                         next_inp.send_keys(text_inject)
                                 except selenium.common.exceptions.ElementNotInteractableException:
@@ -334,7 +342,20 @@ def test_authenticated_stored_posterior(urls):
                                     next_btn.click()
                         else:
                             print(f"\nSkipping form on {next_url} as it was not revealed")
-                else:
+
+                for next_url in to_scan:  # Re-check the urls to see where SSTI has been found
+                    browser.get(next_url)
+                    html = browser.page_source
+
+                    found_ssti = re.search(r"auth stored ssti test 49 ([a-zA-Z0-9:/\-.]+)", html)
+                    if (found_ssti):
+                        print(f"On {next_url} - Found executed SSTI from {found_ssti.group(1)}")
+
+            else:
+                for next_url in urls:
+                    browser.get(next_url)
+                    html = browser.page_source
+
                     auth_groups, input_no = get_forms(html)
 
                     if(input_no > 0):  # We cannot do anything if there are no inputs to inject in
@@ -343,7 +364,7 @@ def test_authenticated_stored_posterior(urls):
                             token = get_token(html)
 
                             # Get the inputs for each form group iteratively
-                            inputs = auth_groups[auth_group]  # investigate this line?? dont seem right
+                            inputs = auth_groups[auth_group]
 
                             types = get_input_types(html)
 
@@ -352,7 +373,7 @@ def test_authenticated_stored_posterior(urls):
                             if(input_no == len(inputs)):  # Check that the count of inputs found earlier is the same the count of "name=" values found
                                 for index in range(len(inputs)):  # Cycle through inputs and fill in based on type
                                     if(types[index] == "text"):
-                                        post_data[inputs[index]] = "ssti test {{7*7}} " + next_url + " " + auth_group
+                                        post_data[inputs[index]] = "auth stored ssti test {{7*7}} " + next_url + " " + auth_group
                                     elif(types[index] == "number"):
                                         post_data[inputs[index]] = 1234
                                     elif(types[index] == "email"):
@@ -365,42 +386,33 @@ def test_authenticated_stored_posterior(urls):
                                 post_data["_token"] = token[0]
                                 authenticated_session.post(auth_group, post_data, cookies=cookies)
                             else:
-                                print("\nCannot test form ", auth_group, " on page: ", next_url, " due to one or more missing name= attribute/s")
+                                print("Cannot test form ", auth_group, " on page: ", next_url, " due to one or more missing name= attribute/s")
                     else:
-                        print(f"\nNo form links found for url: {next_url}. Moving on to next url")
+                        print(f"No form links found for url: {next_url}. Moving on to next url")
 
+                #  Check all urls that were scanned again
+                session_instance = requests.session()  # Create a session to be authenticated
 
-            #  Check all urls that were scanned again
-            session_instance = requests.session()  # Create a session to be authenticated
+                login_page = session_instance.get(login_page_url)  # Get the login page html
+                cookies = session_instance.cookies
 
-            login_page = session_instance.get(login_page_url)  # Get the login page html
-            cookies = session_instance.cookies
+                login_token = get_token(login_page.text)  # Extract the form token
+                login_data["_token"] = login_token
+                login_response = session_instance.post(login_form_url, login_data, cookies=cookies)  # Performing login
+                for nxt_url in to_scan:
+                    site_data = session_instance.get(nxt_url)
+                    html_to_inspect = site_data.text
+                    found_vuln_pairs = []  # Variable to keep track of url pairs found to be vulnerable
 
-            login_token = get_token(login_page.text)  # Extract the form token
-            login_data["_token"] = login_token
-            login_response = session_instance.post(login_form_url, login_data, cookies=cookies)  # Performing login
-            for nxt_url in to_scan:
-                site_data = session_instance.get(nxt_url)
-                html_to_inspect = site_data.text
-                found_vuln_pairs = []  # Variable to keep track of url pairs found to be vulnerable
+                    if("auth stored ssti test 49" in html_to_inspect):  # Check if the url we are checking have executed ssti
+                        for line in html_to_inspect.split("\n"):  # split new lines from html
+                            if("auth stored ssti test 49" in line):
+                                req_line = line  # Save line once found
+                                line_urls = re.findall(r"(http://[a-zA-Z0-9_:;=./\-\\\\]+)", req_line)
+                                if(line_urls[0] + " " + line_urls[1] not in found_vuln_pairs):  # Check if we haven't already found this pair of urls previously
+                                    print("SSTI detected on page ", line_urls[0], " from form url: ", line_urls[1])
 
-                if("ssti test 49" in html_to_inspect):  # Check if the url we are checking have executed ssti
-                    for line in html_to_inspect.split("\n"):  # split new lines from html
-                        if("ssti test 49" in line):
-                            req_line = line  # Save line once found
-                            line_urls = re.findall(r"(http://[a-zA-Z0-9_:;=./\-\\\\]+)", req_line)
-                            if(line_urls[0] + " " + line_urls[1] not in found_vuln_pairs):  # Check if we haven't already found this pair of urls previously
-                                print("SSTI detected on page ", line_urls[0], " from form url: ", line_urls[1])
-
-                            break  # Exit the inner for loop
-                    continue
-            for next_url in to_scan:  # Re-check the urls to see where SSTI has been found
-                browser.get(next_url)
-                html = browser.page_source
-
-                found_ssti = re.search(r"ssti test 49 ([a-zA-Z0-9:/\-.]+)", html)
-                if(found_ssti):
-                    print(f"On {next_url} - Found executed SSTI from {found_ssti.group(1)}")
+                                break  # Exit the inner for loop
         else:
             print("\n\nFailed to authenticate to perform authenticated scan. The scan will now stop")
             sys.exit()

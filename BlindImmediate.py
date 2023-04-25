@@ -2,6 +2,7 @@ import re
 import sys
 import time
 from urllib.parse import urlparse
+import urllib3.exceptions
 import requests
 
 def locate_input_points(html):
@@ -115,21 +116,28 @@ def test_blind_immediate(urls):
                 inputs = groups[group]
 
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = group + "ssti test {{7*7}} " + "@php sleep(10); @endphp"
+                    post_data[inp] = group + "  blind imm ssti test {{7*7}} " + " @php sleep(10); @endphp"
 
                 post_data["_token"] = token  # Add token last
                 start = time.time()
-                req = requests.post(group, data=post_data, cookies=cookies)
+
+                req = None
+                try:
+                    req = requests.post(group, data=post_data, cookies=cookies)
+                except (urllib3.exceptions.MaxRetryError, requests.exceptions.ConnectionError):
+                    print(
+                        "Unable to perform test on " + url + " on form link " + group + " as it is an authentication page")
+                    continue
                 end = time.time()
 
 
                 # If it's visible, we consider that this is reflected injection and not stored immediate injection
-                if ("ssti test 49" in req.text):
+                if ("blind imm ssti test 49" in req.text):
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
                     continue
 
                 # Request took more than 10 but less than 12 seconds, this check ensures that this is not stored immediate SSTI
-                if (end - start >= 10 and end-start < 12):
+                if (end - start >= 10 and end-start < 11.5):
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: True")
                 else:
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")

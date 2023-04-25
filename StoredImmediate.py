@@ -2,6 +2,7 @@ import re
 import sys
 import time
 import requests
+import urllib3.exceptions
 
 def locate_input_points(html):
     """
@@ -98,11 +99,17 @@ def test_stored_immediate(urls):
                 inputs = groups[group]
 
                 for inp in inputs:  # Give each input a value and add to dictionary
-                    post_data[inp] = group + "ssti test {{7*7}} " + "@php sleep(10); @endphp"
+                    post_data[inp] = group + " stored imm ssti test {{7*7}} " + "@php sleep(10); @endphp"
 
                 post_data["_token"] = token  # Add token last
                 start = time.time()
-                req = requests.post(group, data=post_data, cookies=cookies)
+
+                req = None
+                try:
+                    req = requests.post(group, data=post_data, cookies=cookies)
+                except (urllib3.exceptions.MaxRetryError, requests.exceptions.ConnectionError):
+                    print("Unable to perform test on " + url + " on form link " + group + " as it is an authentication page")
+                    continue
                 end = time.time()
 
                 # If it's visible, we consider that this is reflected injection and not stored immediate injection
