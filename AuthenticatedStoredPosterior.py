@@ -266,7 +266,6 @@ def test_authenticated_stored_posterior(urls):
             browser.add_cookie({'name': "domain", 'value': "." + str(hostname)})
 
             if(site_type == "vue"):
-                print("TOSCAN: ", to_scan)
                 for next_url in to_scan:
                     browser.get(next_url)
                     html = browser.page_source

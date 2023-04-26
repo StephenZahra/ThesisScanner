@@ -2,7 +2,6 @@ import re
 import sys
 from urllib.parse import urlparse
 import urllib3.exceptions
-import urllib.request
 import requests
 import subprocess
 
@@ -66,11 +65,14 @@ def filter_links(all_urls, hostname):
     all_urls = list(dict.fromkeys(all_urls))
     temp_storage = []
     for url in all_urls:
-        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
+        if (url != "#"):  # check that the url is not a # and
+            temp_storage.append(url)
+
+        if(str(urlparse(url).hostname) == hostname):
             temp_storage.append(url)
 
     for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
-        if(str(urlparse(last_urls).hostname) == hostname or str(urlparse(last_urls).hostname) == "None"):
+        if (str(urlparse(last_urls).hostname) == hostname or str(urlparse(last_urls).hostname) == "None"):
             output += last_urls + "|"
 
     return output
@@ -148,7 +150,6 @@ def check_nested_links(required_links, session, hostname):
             a_tags = re.findall(r'href="([^"]*)"', str(html))
             vue_urls = re.findall(r'to="([^"]*)"', str(html))
             all_tags = a_tags + vue_urls
-            print("ALL_TAGS: ", all_tags)
 
             for link in all_tags:
                 nested_links.append(link)
@@ -157,23 +158,23 @@ def check_nested_links(required_links, session, hostname):
     return nested_links
 
 
-def filter_links(all_urls, hostname):
-    """
-    This function checks for duplicates in the total collection of links in the website and removes them
-    """
-
-    output = ""
-    all_urls = list(dict.fromkeys(all_urls))
-    temp_storage = []
-    for url in all_urls:
-        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
-            temp_storage.append(url)
-
-    for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
-        if(str(urlparse(last_urls).hostname) == hostname or str(urlparse(last_urls).hostname) == "None"):
-            output += last_urls + "|"
-
-    return output
+# def filter_links(all_urls, hostname):
+#     """
+#     This function checks for duplicates in the total collection of links in the website and removes them
+#     """
+#
+#     output = ""
+#     all_urls = list(dict.fromkeys(all_urls))
+#     temp_storage = []
+#     for url in all_urls:
+#         if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
+#             temp_storage.append(url)
+#
+#     for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
+#         if(str(urlparse(last_urls).hostname) == hostname or str(urlparse(last_urls).hostname) == "None"):
+#             output += last_urls + "|"
+#
+#     return output
 
 
 def test_blind_posterior(urls):
@@ -274,26 +275,25 @@ def test_blind_posterior(urls):
         new_urls = get_page_urls(front)
 
         nested_links = check_nested_links(new_urls, blind_session, hostname)  # Check for links inside the new pages
-        #filtered_urls = filter_links(urls + new_urls + nested_links, hostname)  # Form a collection of urls we've seen so far and new ones
-        filtered_urls = filter_links(new_urls + nested_links, hostname)  # Form a collection of urls we've seen so far and new ones
+        filtered_urls = filter_links(new_urls + nested_links, hostname)  # Form a collection of new_urls and nested urls
         split_urls = list(filtered_urls.split("|"))  # split the filtered_urls string
-        print("FILTEREDURLS: ", filtered_urls)
-        print("SPLITURLS: ", split_urls)
-        input()  #
+
         to_scan = []
         for unique_url in split_urls:
             if(unique_url not in urls):  # If the current URL is not present in the list of URLs we have already seen
                 to_scan.append(unique_url)
         to_scan.pop(-1)  # Removing the last element as it is an empty string
 
-        print("TOSCAN: ", to_scan)
+
         for blind_url in to_scan:  # visit URLs
-            blind_session.get(blind_url)
+            try:
+                blind_session.get(blind_url)
+            except Exception:  # Try catch to ignore urls that do not have http in the string
+                pass
 
         server_instance.terminate()
     else:
         print("\n\nFailed to authenticate to perform blind scan. The scan will now stop\n\n")
-
 
 
 urls = sys.argv[1]

@@ -21,7 +21,7 @@ while True:
     urls_in_string = re.findall(r"http://[a-zA-z0-9.:/]+", str(alert))  # getting all urls found in the alert we receive
     complete_url_string = urls_in_string[0] + " " + urls_in_string[1] + " " + urls_in_string[2]
 
-    if(complete_url_string not in complete_injection_url_list):
+    if(complete_url_string not in complete_injection_url_list):  # check for duplicate cases of ssti, print if not duplicate
         print(alert.decode("utf-8"))
         complete_injection_url_list.append(complete_url_string)
 
