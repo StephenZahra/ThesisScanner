@@ -348,10 +348,10 @@ def test_authenticated_stored_posterior(urls):
 
                     found_ssti = re.search(r"auth stored ssti test 49 ([a-zA-Z0-9:/\-.]+)", html)
                     if (found_ssti):
-                        print(f"On {next_url} - Found executed SSTI from {found_ssti.group(1)}")
+                        print(f"\nOn {next_url} - Found executed SSTI from {found_ssti.group(1)}")
 
             else:
-                for next_url in urls:
+                for next_url in to_scan:
                     browser.get(next_url)
                     html = browser.page_source
 
@@ -401,6 +401,7 @@ def test_authenticated_stored_posterior(urls):
                 for nxt_url in to_scan:
                     site_data = session_instance.get(nxt_url)
                     html_to_inspect = site_data.text
+
                     found_vuln_pairs = []  # Variable to keep track of url pairs found to be vulnerable
 
                     if("auth stored ssti test 49" in html_to_inspect):  # Check if the url we are checking have executed ssti
