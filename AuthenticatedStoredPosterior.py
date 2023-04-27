@@ -26,9 +26,7 @@ def post_url(html):
     """
     post_link = re.findall(r"action=([a-zA-Z0-9_:;=./\"\-'\\\\]+)", html)[0]
 
-    #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\-\\\\]+)", post_link)[0]
-    #formatted_links.append(formatted_link[0])
 
     return formatted_link
 
@@ -59,7 +57,7 @@ def locate_input_points(html):
     for elem in all_names:  # Clean names
         if("name=" in elem):  # Check that name= attribute exists, it is required to test
             temp_name = elem.replace("name=", "")
-            temp_name = temp_name.replace("\"", "")  # IMPORTANT
+            temp_name = temp_name.replace("\"", "")
             final_names.append(temp_name)
         input_counter+=1
 
@@ -170,7 +168,7 @@ def filter_links(all_urls, hostname):
     all_urls = list(dict.fromkeys(all_urls))
     temp_storage = []
     for url in all_urls:
-        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
+        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and the hostnames match
             temp_storage.append(url)
 
     for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session

@@ -43,9 +43,7 @@ def post_url(html):
 
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
 
-    #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
-    #formatted_links.append(formatted_link[0])
 
     return formatted_link
 
@@ -113,11 +111,11 @@ def test_stored_immediate(urls):
                 end = time.time()
 
                 # If it's visible, we consider that this is reflected injection and not stored immediate injection
-                if("ssti test 49" in req.text):
+                if("stored imm ssti test 49" in req.text):
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: False")
                     continue
 
-                # Request took 11 or more seconds which links it to , therefore we can deduce that SSTI was successful
+                # Request took 11 or more seconds, therefore we can deduce that SSTI was successful
                 if(end-start >= 11):
                     scan_result.append("URL: " + url + " Form link: " + group + " isVulnerable: True")
                 else:

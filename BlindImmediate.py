@@ -47,7 +47,7 @@ def filter_links(all_urls, hostname):
     all_urls = list(dict.fromkeys(all_urls))
     temp_storage = []
     for url in all_urls:
-        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
+        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and the hostnames match
             temp_storage.append(url)
 
     for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session

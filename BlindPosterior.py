@@ -65,10 +65,10 @@ def filter_links(all_urls, hostname):
     all_urls = list(dict.fromkeys(all_urls))
     temp_storage = []
     for url in all_urls:
-        if (url != "#"):  # check that the url is not a # and
+        if (url != "#"):  # check that the url is not a #
             temp_storage.append(url)
 
-        if(str(urlparse(url).hostname) == hostname):
+        if(str(urlparse(url).hostname) == hostname):  # check that the url hostnames match
             temp_storage.append(url)
 
     for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
@@ -143,7 +143,6 @@ def check_nested_links(required_links, session, hostname):
             if (hostname not in joined_url):  # check if the url is not formatted properly
                 joined_url = "http://" + hostname + url
 
-            #response = urllib.request.urlopen(joined_url)
             response = session.get(joined_url)
             html = response.text
 
@@ -156,25 +155,6 @@ def check_nested_links(required_links, session, hostname):
         except Exception:
             pass
     return nested_links
-
-
-# def filter_links(all_urls, hostname):
-#     """
-#     This function checks for duplicates in the total collection of links in the website and removes them
-#     """
-#
-#     output = ""
-#     all_urls = list(dict.fromkeys(all_urls))
-#     temp_storage = []
-#     for url in all_urls:
-#         if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
-#             temp_storage.append(url)
-#
-#     for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
-#         if(str(urlparse(last_urls).hostname) == hostname or str(urlparse(last_urls).hostname) == "None"):
-#             output += last_urls + "|"
-#
-#     return output
 
 
 def test_blind_posterior(urls):
@@ -195,8 +175,7 @@ def test_blind_posterior(urls):
 
         groups, input_no = get_forms(front.text)
 
-        # Check if we have already been to the login page to avoid overriding the values, also avoid the registration page
-        # if("register" not in front.text):
+        # Check if we have already been to the login page to avoid overriding the values
         if (login_found == False):
             login_form_url, login_inputs, login_page_url, login_found = check_login_form(groups, url)
         else:

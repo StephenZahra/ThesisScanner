@@ -91,7 +91,7 @@ def filter_links(all_urls, hostname):
     all_urls = list(dict.fromkeys(all_urls))
     temp_storage = []
     for url in all_urls:
-        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # and
+        if(url != "#" or str(urlparse(url).hostname) == hostname):  # check that the url is not a # or the hostnames are equal
             temp_storage.append(url)
 
     for last_urls in temp_storage:  # This helps us remove unneeded urls and stay in session
@@ -108,9 +108,7 @@ def post_url(html):
 
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
 
-    #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
-    #formatted_links.append(formatted_link[0])
 
     return formatted_link
 

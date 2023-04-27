@@ -42,9 +42,7 @@ def post_url(html):
     """
     post_link = re.findall(r"action=([a-zA-Z0-9 _:;=./\"'\\\\]+)", html)[0]
 
-    #for link in post_links:
     formatted_link = re.findall(r"(http://[a-zA-Z0-9_:;=./\\\\]+)", post_link)[0]
-    #formatted_links.append(formatted_link[0])
 
     return formatted_link
 
