@@ -174,8 +174,6 @@ def test_stored_posterior(urls):
                     print(
                         "Unable to perform test on " + url + " on form link " + group + " as it is an authentication page")
                     continue
-
-                requests.post(group, data=post_data, cookies=cookies)
         except Exception:
             continue
 
@@ -194,8 +192,8 @@ def test_stored_posterior(urls):
 
                 # Find all URLS on a page that are equal to req_line (the URL we are looking for)
                 origin_urls = re.findall(r"(http://[a-zA-Z0-9_:;=./\'\\\\]+)", req_line)
-                if("ssti test 49" in req_line):
-                    scan_result.append("SSTI succeeded, Origin Page: " + str(origin_urls[1]) + " Origin Form: " + str(origin_urls[0]) + " Executed on: " + str(next_url))
+                if("stored ssti test 49" in req_line):
+                    scan_result.append("SSTI succeeded, Origin Page: " + str(origin_urls[0]) + " Origin Form: " + str(origin_urls[1]) + " Executed on: " + str(next_url))
                 else:
                     scan_result.append("SSTI tested from: " + str(origin_urls[0]) + " was unsuccessful")
             elif (html_to_inspect.find(random_string) == -1 and html_to_inspect.find("49") == -1):  # If we find no unique string or 49 in the html

@@ -272,6 +272,7 @@ def test_authenticated_stored_posterior(urls):
 
                     if(len(form_groups) == 0):
                         print(f"No forms detected on {next_url}. Moving on to next url")
+                        continue
 
                     for index in range(len(form_groups)):
                         form_groups = browser.find_elements(By.TAG_NAME, 'form')

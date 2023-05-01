@@ -58,8 +58,7 @@ if(cred_choice == "1"):  # User decides to enter credentials
                 print("\nInvalid input, please try again\n\n")
 
 
-print("\n\nScanning for URLs")
-print("Please enter an entry point URL: ")
+print("\n\nURL scan will now commence. Please enter an entry point URL: ")
 urls = subprocess.Popen(['python',  'URLFinder.py'], stdout=subprocess.PIPE)
 encoded = urls.communicate()
 
